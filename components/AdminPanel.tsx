@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Product } from '../types';
 import { fetchProducts, saveProductList } from '../services/productService';
-import { Plus, Trash2, Edit2, LogOut, RefreshCw, Loader2, Save } from 'lucide-react';
+import { Plus, Trash2, Edit2, LogOut, RefreshCw, Loader2, Key, Lock, ChevronDown, ChevronUp } from 'lucide-react';
 
 interface AdminPanelProps {
   onLogout: () => void;
@@ -13,12 +13,20 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   
-  // Form State
+  // Product Form State
   const [formData, setFormData] = useState<Product>({
     id: '',
     name: '',
     price: 0,
     category: 'Teh'
+  });
+
+  // PIN Management State
+  const [showPinForm, setShowPinForm] = useState(false);
+  const [pinData, setPinData] = useState({
+    oldPin: '',
+    newPin: '',
+    confirmPin: ''
   });
 
   useEffect(() => {
@@ -56,7 +64,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout }) => {
     }
   };
 
-  const handleSave = async (e: React.FormEvent) => {
+  const handleSaveProduct = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.name || formData.price <= 0) return;
 
@@ -84,8 +92,33 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout }) => {
     setIsSaving(false);
   };
 
+  const handleChangePin = (e: React.FormEvent) => {
+    e.preventDefault();
+    const currentStoredPin = localStorage.getItem('tokosheet_admin_pin') || '1234';
+
+    if (pinData.oldPin !== currentStoredPin) {
+      alert('PIN Lama salah!');
+      return;
+    }
+
+    if (pinData.newPin.length < 4) {
+      alert('PIN Baru minimal 4 karakter');
+      return;
+    }
+
+    if (pinData.newPin !== pinData.confirmPin) {
+      alert('Konfirmasi PIN tidak cocok!');
+      return;
+    }
+
+    localStorage.setItem('tokosheet_admin_pin', pinData.newPin);
+    alert('PIN Admin berhasil diubah!');
+    setPinData({ oldPin: '', newPin: '', confirmPin: '' });
+    setShowPinForm(false);
+  };
+
   return (
-    <div className="p-4 pb-24 h-full flex flex-col bg-gray-50">
+    <div className="p-4 pb-24 h-full flex flex-col bg-gray-50 overflow-y-auto no-scrollbar">
       <header className="mb-6 flex justify-between items-center">
         <div>
           <h1 className="text-2xl font-bold text-gray-800">Admin Panel</h1>
@@ -111,7 +144,72 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout }) => {
         </div>
       </header>
 
-      {/* Form Tambah/Edit */}
+      {/* Security Settings Accordion */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 mb-6 overflow-hidden">
+        <button 
+          onClick={() => setShowPinForm(!showPinForm)}
+          className="w-full p-4 flex justify-between items-center bg-gray-50 hover:bg-gray-100 transition-colors"
+        >
+          <div className="flex items-center text-gray-700 font-bold text-sm">
+            <Key size={16} className="mr-2 text-orange-500"/>
+            Pengaturan Keamanan
+          </div>
+          {showPinForm ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+        </button>
+
+        {showPinForm && (
+          <form onSubmit={handleChangePin} className="p-4 bg-white space-y-3 animate-fade-in border-t border-gray-100">
+            <div>
+              <label className="text-xs text-gray-500 block mb-1">PIN Lama</label>
+              <div className="relative">
+                <input 
+                  type="password"
+                  value={pinData.oldPin}
+                  onChange={(e) => setPinData({...pinData, oldPin: e.target.value})}
+                  className="w-full pl-8 border-b border-gray-300 py-2 text-sm focus:border-orange-500 outline-none"
+                  placeholder="****"
+                  required
+                />
+                <Lock size={14} className="absolute left-0 top-3 text-gray-400" />
+              </div>
+            </div>
+            
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="text-xs text-gray-500 block mb-1">PIN Baru</label>
+                <input 
+                  type="number"
+                  value={pinData.newPin}
+                  onChange={(e) => setPinData({...pinData, newPin: e.target.value})}
+                  className="w-full border-b border-gray-300 py-2 text-sm focus:border-orange-500 outline-none"
+                  placeholder="****"
+                  required
+                />
+              </div>
+              <div>
+                <label className="text-xs text-gray-500 block mb-1">Konfirmasi</label>
+                <input 
+                  type="number"
+                  value={pinData.confirmPin}
+                  onChange={(e) => setPinData({...pinData, confirmPin: e.target.value})}
+                  className="w-full border-b border-gray-300 py-2 text-sm focus:border-orange-500 outline-none"
+                  placeholder="****"
+                  required
+                />
+              </div>
+            </div>
+
+            <button 
+              type="submit" 
+              className="w-full bg-orange-500 text-white py-2 rounded-lg text-sm font-bold shadow hover:bg-orange-600 transition-colors mt-2"
+            >
+              Ubah PIN Admin
+            </button>
+          </form>
+        )}
+      </div>
+
+      {/* Form Tambah/Edit Produk */}
       <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 mb-6 relative">
         {isSaving && (
           <div className="absolute inset-0 bg-white/50 z-10 flex items-center justify-center rounded-xl">
@@ -123,7 +221,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout }) => {
           {editingId ? 'Edit Produk' : 'Tambah Produk Baru'}
         </h3>
         
-        <form onSubmit={handleSave} className="space-y-3">
+        <form onSubmit={handleSaveProduct} className="space-y-3">
           <div>
             <label className="text-xs text-gray-500">Nama Produk</label>
             <input
@@ -148,6 +246,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout }) => {
                 <option value="Kopi">Kopi</option>
                 <option value="Susu">Susu</option>
                 <option value="Coklat">Coklat</option>
+                <option value="Makanan">Makanan</option>
+                <option value="Lainnya">Lainnya</option>
               </select>
             </div>
             <div>
@@ -185,7 +285,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout }) => {
       </div>
 
       {/* List Produk */}
-      <div className="flex-1 bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden flex flex-col">
+      <div className="flex-1 bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden flex flex-col min-h-[300px]">
         <div className="p-3 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
           <h3 className="font-bold text-xs text-gray-500 uppercase tracking-wider">Daftar Menu ({products.length})</h3>
           <span className="text-[10px] text-gray-400 italic">Auto-sync Cloud</span>

@@ -13,7 +13,10 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
 
   const handleAdminLogin = (e: React.FormEvent) => {
     e.preventDefault();
-    if (pin === '1234') {
+    // Ambil PIN dari localStorage, jika tidak ada gunakan default '1234'
+    const storedPin = localStorage.getItem('tokosheet_admin_pin') || '1234';
+    
+    if (pin === storedPin) {
       onLogin(UserRole.ADMIN);
     } else {
       setError('PIN Salah!');
@@ -57,7 +60,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
             <h2 className="text-xl font-bold mb-4 text-center">Login Admin</h2>
             <form onSubmit={handleAdminLogin} className="space-y-4">
               <div>
-                <label className="block text-xs text-gray-500 mb-1">Masukkan PIN (Default: 1234)</label>
+                <label className="block text-xs text-gray-500 mb-1">Masukkan PIN</label>
                 <div className="relative">
                   <input
                     type="password"
