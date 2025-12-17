@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { UserRole } from '../types';
-import { Shield, User, Lock, Store } from 'lucide-react';
+import { Shield, User, Lock, Store, Loader2 } from 'lucide-react';
+import { fetchAdminPin } from '../services/storageService';
 
 interface LoginProps {
   onLogin: (role: UserRole) => void;
@@ -10,11 +11,14 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
   const [showAdminInput, setShowAdminInput] = useState(false);
   const [pin, setPin] = useState('');
   const [error, setError] = useState('');
+  const [isChecking, setIsChecking] = useState(false);
 
-  const handleAdminLogin = (e: React.FormEvent) => {
+  const handleAdminLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Ambil PIN dari localStorage, jika tidak ada gunakan default '1234'
-    const storedPin = localStorage.getItem('tokosheet_admin_pin') || '1234';
+    setIsChecking(true);
+    
+    // Ambil PIN terbaru (dari cloud atau local fallback)
+    const storedPin = await fetchAdminPin();
     
     if (pin === storedPin) {
       onLogin(UserRole.ADMIN);
@@ -22,6 +26,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
       setError('PIN Salah!');
       setPin('');
     }
+    setIsChecking(false);
   };
 
   return (
@@ -72,6 +77,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
                     placeholder="****"
                     className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-center text-2xl tracking-widest font-bold"
                     autoFocus
+                    disabled={isChecking}
                   />
                   <Lock size={20} className="absolute left-3 top-4 text-gray-400" />
                 </div>
@@ -80,9 +86,10 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
               
               <button
                 type="submit"
-                className="w-full bg-blue-600 text-white py-3 rounded-xl font-bold hover:bg-blue-700 transition-colors"
+                disabled={isChecking}
+                className="w-full bg-blue-600 text-white py-3 rounded-xl font-bold hover:bg-blue-700 transition-colors flex items-center justify-center"
               >
-                Masuk
+                {isChecking ? <Loader2 className="animate-spin" size={20} /> : "Masuk"}
               </button>
               
               <button
@@ -92,6 +99,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
                   setPin('');
                   setError('');
                 }}
+                disabled={isChecking}
                 className="w-full text-gray-500 text-sm py-2 hover:underline"
               >
                 Kembali
@@ -101,7 +109,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
         )}
       </div>
       
-      <p className="mt-12 text-blue-200 text-xs">v1.1.0 • Powered by Gemini AI</p>
+      <p className="mt-12 text-blue-200 text-xs">v1.2.0 • Powered by Gemini AI</p>
     </div>
   );
 };

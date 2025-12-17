@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Product } from '../types';
 import { fetchProducts, saveProductList } from '../services/productService';
-import { getApiUrl, saveApiUrl } from '../services/storageService';
+import { getApiUrl, saveApiUrl, fetchAdminPin, saveAdminPin } from '../services/storageService';
 import { Plus, Trash2, Edit2, LogOut, RefreshCw, Loader2, Key, Lock, ChevronDown, ChevronUp, Package, Link as LinkIcon, Check, Copy } from 'lucide-react';
 
 interface AdminPanelProps {
@@ -60,6 +60,26 @@ function doGet(e) {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var type = e.parameter.type || 'sales';
   
+  // -- GET SETTINGS (PIN) --
+  if (type === 'settings') {
+     var sheet = ss.getSheetByName('Settings');
+     if (!sheet) {
+        sheet = ss.insertSheet('Settings');
+        sheet.appendRow(['Key', 'Value']);
+        sheet.appendRow(['ADMIN_PIN', '1234']); // Default
+     }
+     var data = sheet.getDataRange().getValues();
+     var pin = '1234';
+     for(var i=0; i<data.length; i++) {
+        if(data[i][0] === 'ADMIN_PIN') {
+           pin = data[i][1];
+           break;
+        }
+     }
+     return ContentService.createTextOutput(JSON.stringify({status: 'success', pin: pin}))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+
   var sheetName = 'Transactions';
   if (type === 'purchases') sheetName = 'Purchases';
   if (type === 'products') sheetName = 'Products';
@@ -91,6 +111,29 @@ function doPost(e) {
     var payload = JSON.parse(e.postData.contents);
     var action = payload.action; 
     
+    // -- UPDATE PIN --
+    if (action === 'update_pin') {
+      var sheet = ss.getSheetByName('Settings');
+      if (!sheet) {
+         sheet = ss.insertSheet('Settings');
+         sheet.appendRow(['Key', 'Value']);
+      }
+      var data = sheet.getDataRange().getValues();
+      var found = false;
+      for(var i=0; i<data.length; i++) {
+        if(data[i][0] === 'ADMIN_PIN') {
+           sheet.getRange(i+1, 2).setValue(payload.pin);
+           found = true;
+           break;
+        }
+      }
+      if(!found) {
+         sheet.appendRow(['ADMIN_PIN', payload.pin]);
+      }
+      return ContentService.createTextOutput(JSON.stringify({status: 'success'}))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
     // -- LOGIKA UPDATE PRODUK (Overwrite) --
     if (action === 'update_products') {
       var sheet = ss.getSheetByName('Products');
@@ -199,29 +242,42 @@ function doPost(e) {
 
   // --- Handlers PIN ---
 
-  const handleChangePin = (e: React.FormEvent) => {
+  const handleChangePin = async (e: React.FormEvent) => {
     e.preventDefault();
-    const currentStoredPin = localStorage.getItem('tokosheet_admin_pin') || '1234';
+    setIsSaving(true);
+    
+    // Validasi PIN Lama (Ambil dari cache atau cloud untuk memastikan)
+    const currentStoredPin = await fetchAdminPin();
 
     if (pinData.oldPin !== currentStoredPin) {
       alert('PIN Lama salah!');
+      setIsSaving(false);
       return;
     }
 
     if (pinData.newPin.length < 4) {
       alert('PIN Baru minimal 4 karakter');
+      setIsSaving(false);
       return;
     }
 
     if (pinData.newPin !== pinData.confirmPin) {
       alert('Konfirmasi PIN tidak cocok!');
+      setIsSaving(false);
       return;
     }
 
-    localStorage.setItem('tokosheet_admin_pin', pinData.newPin);
-    alert('PIN Admin berhasil diubah!');
+    // Simpan PIN Baru
+    const success = await saveAdminPin(pinData.newPin);
+    if (success) {
+        alert('PIN Admin berhasil diubah dan tersimpan di database!');
+    } else {
+        alert('PIN tersimpan di perangkat lokal, gagal sinkronisasi ke Cloud.');
+    }
+    
     setPinData({ oldPin: '', newPin: '', confirmPin: '' });
     setShowPinForm(false);
+    setIsSaving(false);
   };
 
   const toggleProductForm = () => {
@@ -235,7 +291,17 @@ function doPost(e) {
   };
 
   return (
-    <div className="p-4 pb-24 h-full flex flex-col bg-gray-50 overflow-y-auto no-scrollbar">
+    <div className="p-4 pb-24 h-full flex flex-col bg-gray-50 overflow-y-auto no-scrollbar relative">
+      {/* Global Saving Overlay */}
+      {isSaving && (
+          <div className="fixed inset-0 bg-black/30 z-50 flex items-center justify-center backdrop-blur-sm">
+            <div className="bg-white p-4 rounded-xl shadow-xl flex items-center space-x-3">
+                <Loader2 className="animate-spin text-blue-600" />
+                <span className="font-bold text-gray-700">Memproses...</span>
+            </div>
+          </div>
+      )}
+
       <header className="mb-6 flex justify-between items-center">
         <div>
           <h1 className="text-2xl font-bold text-gray-800">Admin Panel</h1>
@@ -312,7 +378,7 @@ function doPost(e) {
               <div className="mt-4 bg-gray-50 p-3 rounded-lg border border-gray-200 text-xs text-gray-700 space-y-2 max-h-60 overflow-y-auto">
                 <p>1. Buka Google Sheet Anda.</p>
                 <p>2. Klik <b>Extensions</b> &gt; <b>Apps Script</b>.</p>
-                <p>3. <b>PENTING:</b> Hapus semua kode lama, ganti dengan kode baru ini agar semua fitur berjalan:</p>
+                <p>3. <b>PENTING:</b> Hapus semua kode lama, ganti dengan kode baru ini agar fitur PIN & Data berjalan:</p>
                 <div className="relative group">
                   <pre className="bg-gray-800 text-gray-100 p-2 rounded overflow-x-auto text-[10px] font-mono">
                     {appScriptCode}
@@ -353,6 +419,11 @@ function doPost(e) {
 
         {showPinForm && (
           <form onSubmit={handleChangePin} className="p-4 bg-white space-y-3 animate-fade-in border-t border-gray-100">
+             <div className="bg-orange-50 p-2 rounded border border-orange-100 mb-2">
+                 <p className="text-[10px] text-orange-700">
+                    PIN akan tersimpan di Google Sheet (Sheet "Settings"). Jika lupa, Anda bisa mengeceknya langsung di Spreadsheet.
+                 </p>
+             </div>
             <div>
               <label className="text-xs text-gray-500 block mb-1">PIN Lama</label>
               <div className="relative">
@@ -405,12 +476,6 @@ function doPost(e) {
 
       {/* 3. Accordion Form Tambah/Edit Produk */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 mb-6 overflow-hidden relative">
-        {isSaving && (
-          <div className="absolute inset-0 bg-white/50 z-20 flex items-center justify-center">
-            <Loader2 className="animate-spin text-blue-600" />
-          </div>
-        )}
-        
         <button 
           onClick={toggleProductForm}
           className={`w-full p-4 flex justify-between items-center transition-colors ${showProductForm ? 'bg-blue-50' : 'bg-gray-50 hover:bg-gray-100'}`}

@@ -3,6 +3,7 @@ import { Transaction, Purchase } from '../types';
 const STORAGE_KEY = 'tokosheet_data';
 const PURCHASE_KEY = 'tokosheet_purchases';
 const API_URL_KEY = 'tokosheet_api_url';
+const ADMIN_PIN_KEY = 'tokosheet_admin_pin';
 
 // Helper untuk mendapatkan URL
 export const getApiUrl = (): string => {
@@ -11,6 +12,60 @@ export const getApiUrl = (): string => {
 
 export const saveApiUrl = (url: string) => {
   localStorage.setItem(API_URL_KEY, url);
+};
+
+// --- ADMIN PIN MANAGEMENT ---
+
+export const fetchAdminPin = async (): Promise<string> => {
+  const apiUrl = getApiUrl();
+  
+  // Coba ambil dari Cloud
+  if (apiUrl) {
+    try {
+      const separator = apiUrl.includes('?') ? '&' : '?';
+      const response = await fetch(`${apiUrl}${separator}type=settings&t=${Date.now()}`);
+      
+      if (response.ok) {
+        const json = await response.json();
+        if (json.status === 'success' && json.pin) {
+          // Sync ke local storage agar offline tetap jalan dengan PIN terbaru yg diketahui
+          localStorage.setItem(ADMIN_PIN_KEY, String(json.pin));
+          return String(json.pin);
+        }
+      }
+    } catch (error) {
+      console.error("Gagal ambil PIN dari cloud, menggunakan cache lokal", error);
+    }
+  }
+
+  // Fallback ke LocalStorage atau Default
+  return localStorage.getItem(ADMIN_PIN_KEY) || '1234';
+};
+
+export const saveAdminPin = async (newPin: string): Promise<boolean> => {
+  // Simpan Lokal dulu
+  localStorage.setItem(ADMIN_PIN_KEY, newPin);
+  
+  const apiUrl = getApiUrl();
+  if (apiUrl) {
+    try {
+      const payload = {
+        action: 'update_pin',
+        pin: newPin
+      };
+
+      await fetch(apiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify(payload)
+      });
+      return true;
+    } catch (error) {
+      console.error("Gagal simpan PIN ke cloud:", error);
+      return false; 
+    }
+  }
+  return true; // Dianggap sukses jika offline (tersimpan lokal)
 };
 
 // --- DATA FETCHING (SALES) ---
