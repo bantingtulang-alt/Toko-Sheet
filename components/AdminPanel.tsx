@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Product } from '../types';
 import { fetchProducts, saveProductList } from '../services/productService';
-import { Plus, Trash2, Edit2, LogOut, RefreshCw, Loader2, Key, Lock, ChevronDown, ChevronUp, Package } from 'lucide-react';
+import { getApiUrl, saveApiUrl } from '../services/storageService';
+import { Plus, Trash2, Edit2, LogOut, RefreshCw, Loader2, Key, Lock, ChevronDown, ChevronUp, Package, Link as LinkIcon, Check, Copy } from 'lucide-react';
 
 interface AdminPanelProps {
   onLogout: () => void;
@@ -13,6 +14,11 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   
+  // Google Sheet Config State
+  const [showConfigForm, setShowConfigForm] = useState(false);
+  const [apiUrl, setApiUrl] = useState('');
+  const [showTutorial, setShowTutorial] = useState(false);
+
   // Product Form State
   const [showProductForm, setShowProductForm] = useState(false);
   const [formData, setFormData] = useState<Product>({
@@ -32,6 +38,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout }) => {
 
   useEffect(() => {
     loadProducts();
+    setApiUrl(getApiUrl());
   }, []);
 
   const loadProducts = async () => {
@@ -41,18 +48,110 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout }) => {
     setIsLoading(false);
   };
 
+  // --- Handlers Config Google Sheet ---
+  const handleSaveConfig = () => {
+    saveApiUrl(apiUrl);
+    alert('Konfigurasi berhasil disimpan. Silakan reload data di halaman Data.');
+    setShowConfigForm(false);
+  };
+
+  const appScriptCode = `
+function doGet(e) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var type = e.parameter.type || 'sales';
+  
+  var sheetName = 'Transactions';
+  if (type === 'purchases') sheetName = 'Purchases';
+  if (type === 'products') sheetName = 'Products';
+
+  var sheet = ss.getSheetByName(sheetName);
+  
+  // Setup Sheet jika belum ada
+  if (!sheet) {
+    sheet = ss.insertSheet(sheetName);
+    if(type === 'purchases') {
+       sheet.appendRow(['ID', 'Date', 'Item Name', 'Supplier', 'Qty', 'Price', 'Total']);
+    } else if (type === 'products') {
+       sheet.appendRow(['ID', 'Name', 'Price', 'Category']);
+    } else {
+       sheet.appendRow(['ID', 'Date', 'Product', 'Category', 'Qty', 'Price', 'Total', 'Payment Method']);
+    }
+  }
+
+  var data = sheet.getDataRange().getValues();
+  if (data.length > 0) data.shift(); // Hapus header
+  
+  return ContentService.createTextOutput(JSON.stringify({status: 'success', data: data}))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+function doPost(e) {
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var payload = JSON.parse(e.postData.contents);
+    var action = payload.action; 
+    
+    // -- LOGIKA UPDATE PRODUK (Overwrite) --
+    if (action === 'update_products') {
+      var sheet = ss.getSheetByName('Products');
+      if (!sheet) {
+        sheet = ss.insertSheet('Products');
+        sheet.appendRow(['ID', 'Name', 'Price', 'Category']);
+      } else {
+        // Clear konten lama kecuali header, atau overwrite semua
+        sheet.clear(); 
+        sheet.appendRow(['ID', 'Name', 'Price', 'Category']);
+      }
+      
+      // Jika ada data baru, masukkan
+      if (payload.data && payload.data.length > 0) {
+        // Batch operation agar cepat
+        sheet.getRange(2, 1, payload.data.length, payload.data[0].length).setValues(payload.data);
+      }
+      return ContentService.createTextOutput(JSON.stringify({status: 'success'}))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    // -- LOGIKA TRANSAKSI & PEMBELIAN (Append) --
+    var sheetName = (action === 'add_purchase') ? 'Purchases' : 'Transactions';
+    var sheet = ss.getSheetByName(sheetName);
+    
+    if (!sheet) {
+       sheet = ss.insertSheet(sheetName);
+       if(action === 'add_purchase') {
+         sheet.appendRow(['ID', 'Date', 'Item Name', 'Supplier', 'Qty', 'Price', 'Total']);
+       } else {
+         sheet.appendRow(['ID', 'Date', 'Product', 'Category', 'Qty', 'Price', 'Total', 'Payment Method']);
+       }
+    }
+
+    if (payload.data) {
+      sheet.appendRow(payload.data);
+    }
+    
+    return ContentService.createTextOutput(JSON.stringify({status: 'success'}))
+      .setMimeType(ContentService.MimeType.JSON);
+  } catch(err) {
+    return ContentService.createTextOutput(JSON.stringify({status: 'error', message: err.toString()}))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+}
+  `.trim();
+
+  // --- Handlers Produk ---
+
   const handleEdit = (product: Product) => {
     setEditingId(product.id);
     setFormData(product);
-    setShowProductForm(true); // Otomatis buka form saat edit
-    // Tutup form PIN jika sedang terbuka agar fokus
+    setShowProductForm(true); 
     setShowPinForm(false);
+    setShowConfigForm(false);
   };
 
   const handleCancel = () => {
     setEditingId(null);
     setFormData({ id: '', name: '', price: 0, category: 'Teh' });
-    setShowProductForm(false); // Tutup form setelah batal
+    setShowProductForm(false);
   };
 
   const handleDelete = async (id: string) => {
@@ -90,13 +189,15 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout }) => {
     const success = await saveProductList(updatedList); // Cloud Sync
     
     if (success) {
-      handleCancel(); // Ini akan menutup form juga karena memanggil handleCancel
+      handleCancel(); 
     } else {
       alert("Gagal koneksi ke Google Sheet, tersimpan di lokal sementara.");
       handleCancel();
     }
     setIsSaving(false);
   };
+
+  // --- Handlers PIN ---
 
   const handleChangePin = (e: React.FormEvent) => {
     e.preventDefault();
@@ -125,11 +226,12 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout }) => {
 
   const toggleProductForm = () => {
     if (showProductForm) {
-      // Jika sedang menutup, reset form edit
       setEditingId(null);
       setFormData({ id: '', name: '', price: 0, category: 'Teh' });
     }
     setShowProductForm(!showProductForm);
+    setShowConfigForm(false);
+    setShowPinForm(false);
   };
 
   return (
@@ -159,10 +261,87 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout }) => {
         </div>
       </header>
 
-      {/* Security Settings Accordion */}
+      {/* 1. Google Sheet Connection Accordion */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 mb-4 overflow-hidden">
         <button 
-          onClick={() => setShowPinForm(!showPinForm)}
+          onClick={() => {
+            setShowConfigForm(!showConfigForm);
+            setShowPinForm(false);
+            setShowProductForm(false);
+          }}
+          className="w-full p-4 flex justify-between items-center bg-gray-50 hover:bg-gray-100 transition-colors"
+        >
+          <div className="flex items-center text-gray-700 font-bold text-sm">
+            <LinkIcon size={16} className="mr-2 text-green-600"/>
+            Koneksi Google Sheet
+          </div>
+          {showConfigForm ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+        </button>
+
+        {showConfigForm && (
+          <div className="p-4 bg-white animate-fade-in border-t border-gray-100">
+             <div className="mb-3">
+              <label className="text-xs text-gray-600 block mb-1">Web App URL</label>
+              <input 
+                type="text" 
+                value={apiUrl}
+                onChange={(e) => setApiUrl(e.target.value)}
+                placeholder="https://script.google.com/macros/s/..."
+                className="w-full text-xs p-2 border border-gray-300 rounded-lg outline-none focus:border-green-500"
+              />
+            </div>
+
+            <div className="flex justify-between items-center">
+              <button 
+                onClick={() => setShowTutorial(!showTutorial)}
+                className="text-xs text-blue-600 underline flex items-center"
+              >
+                {showTutorial ? 'Tutup Tutorial' : 'Cara Pasang Script'} 
+                {showTutorial ? <ChevronUp size={12}/> : <ChevronDown size={12}/>}
+              </button>
+              <button 
+                onClick={handleSaveConfig}
+                className="bg-green-600 text-white px-4 py-2 rounded-lg text-xs font-bold flex items-center shadow-sm hover:bg-green-700"
+              >
+                <Check size={14} className="mr-1"/> Simpan
+              </button>
+            </div>
+
+            {/* Tutorial Section */}
+            {showTutorial && (
+              <div className="mt-4 bg-gray-50 p-3 rounded-lg border border-gray-200 text-xs text-gray-700 space-y-2 max-h-60 overflow-y-auto">
+                <p>1. Buka Google Sheet Anda.</p>
+                <p>2. Klik <b>Extensions</b> &gt; <b>Apps Script</b>.</p>
+                <p>3. <b>PENTING:</b> Hapus semua kode lama, ganti dengan kode baru ini agar semua fitur berjalan:</p>
+                <div className="relative group">
+                  <pre className="bg-gray-800 text-gray-100 p-2 rounded overflow-x-auto text-[10px] font-mono">
+                    {appScriptCode}
+                  </pre>
+                  <button 
+                    onClick={() => navigator.clipboard.writeText(appScriptCode)}
+                    className="absolute top-1 right-1 bg-white text-gray-800 p-1 rounded opacity-0 group-hover:opacity-100 shadow"
+                    title="Copy Code"
+                  >
+                    <Copy size={12}/>
+                  </button>
+                </div>
+                <p>4. Klik <b>Deploy</b> &gt; <b>New deployment</b>.</p>
+                <p>5. Pastikan <i>Who has access</i> diatur ke <b>Anyone</b>.</p>
+                <p>6. Klik Deploy, salin <b>Web App URL</b> baru (jika berubah) dan paste di kolom input di atas.</p>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* 2. Security Settings Accordion */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 mb-4 overflow-hidden">
+        <button 
+          onClick={() => {
+            setShowPinForm(!showPinForm);
+            setShowConfigForm(false);
+            setShowProductForm(false);
+          }}
           className="w-full p-4 flex justify-between items-center bg-gray-50 hover:bg-gray-100 transition-colors"
         >
           <div className="flex items-center text-gray-700 font-bold text-sm">
@@ -224,7 +403,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout }) => {
         )}
       </div>
 
-      {/* Accordion Form Tambah/Edit Produk */}
+      {/* 3. Accordion Form Tambah/Edit Produk */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 mb-6 overflow-hidden relative">
         {isSaving && (
           <div className="absolute inset-0 bg-white/50 z-20 flex items-center justify-center">
