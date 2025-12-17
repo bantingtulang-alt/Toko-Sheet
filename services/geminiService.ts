@@ -1,10 +1,15 @@
 import { GoogleGenAI } from "@google/genai";
 import { Transaction } from "../types";
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+// Inisialisasi lazy agar tidak crash saat load pertama jika env belum set
+const getAI = () => {
+  return new GoogleGenAI({ apiKey: process.env.API_KEY });
+};
 
 export const analyzeSalesData = async (transactions: Transaction[], question: string): Promise<string> => {
   try {
+    const ai = getAI();
+    
     // Format data as a CSV-like string to save tokens but keep structure
     const dataString = transactions.slice(0, 50).map(t => 
       `${t.date.split('T')[0]}, ${t.productName}, ${t.category}, Qty:${t.quantity}, Rp${t.total}`
