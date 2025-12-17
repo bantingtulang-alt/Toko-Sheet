@@ -10,6 +10,19 @@ export default defineConfig(({ mode }) => {
     plugins: [react()],
     build: {
       outDir: 'dist',
+      // Menaikkan batas peringatan chunk menjadi 1.5MB (aman untuk aplikasi modern)
+      chunkSizeWarningLimit: 1500,
+      rollupOptions: {
+        output: {
+          // Memisahkan library pihak ketiga (node_modules) menjadi file terpisah (vendor.js)
+          // Ini membuat loading aplikasi lebih cepat karena browser bisa men-cache library secara terpisah
+          manualChunks(id) {
+            if (id.includes('node_modules')) {
+              return 'vendor';
+            }
+          }
+        }
+      }
     },
     define: {
       // Ini penting agar process.env.API_KEY bisa dibaca di browser tanpa crash
