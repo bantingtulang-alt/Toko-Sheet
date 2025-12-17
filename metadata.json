@@ -1,0 +1,5 @@
+{
+  "name": "TokoSheet AI",
+  "description": "Aplikasi Point of Sales mobile-first yang menyimpan data penjualan ala Google Sheet dan menggunakan Gemini AI untuk analisis bisnis.",
+  "requestFramePermissions": []
+}
