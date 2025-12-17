@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Product } from '../types';
 import { fetchProducts, saveProductList } from '../services/productService';
-import { Plus, Trash2, Edit2, LogOut, RefreshCw, Loader2, Key, Lock, ChevronDown, ChevronUp } from 'lucide-react';
+import { Plus, Trash2, Edit2, LogOut, RefreshCw, Loader2, Key, Lock, ChevronDown, ChevronUp, Package } from 'lucide-react';
 
 interface AdminPanelProps {
   onLogout: () => void;
@@ -14,6 +14,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout }) => {
   const [isSaving, setIsSaving] = useState(false);
   
   // Product Form State
+  const [showProductForm, setShowProductForm] = useState(false);
   const [formData, setFormData] = useState<Product>({
     id: '',
     name: '',
@@ -43,11 +44,15 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout }) => {
   const handleEdit = (product: Product) => {
     setEditingId(product.id);
     setFormData(product);
+    setShowProductForm(true); // Otomatis buka form saat edit
+    // Tutup form PIN jika sedang terbuka agar fokus
+    setShowPinForm(false);
   };
 
   const handleCancel = () => {
     setEditingId(null);
     setFormData({ id: '', name: '', price: 0, category: 'Teh' });
+    setShowProductForm(false); // Tutup form setelah batal
   };
 
   const handleDelete = async (id: string) => {
@@ -85,9 +90,10 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout }) => {
     const success = await saveProductList(updatedList); // Cloud Sync
     
     if (success) {
-      handleCancel();
+      handleCancel(); // Ini akan menutup form juga karena memanggil handleCancel
     } else {
       alert("Gagal koneksi ke Google Sheet, tersimpan di lokal sementara.");
+      handleCancel();
     }
     setIsSaving(false);
   };
@@ -115,6 +121,15 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout }) => {
     alert('PIN Admin berhasil diubah!');
     setPinData({ oldPin: '', newPin: '', confirmPin: '' });
     setShowPinForm(false);
+  };
+
+  const toggleProductForm = () => {
+    if (showProductForm) {
+      // Jika sedang menutup, reset form edit
+      setEditingId(null);
+      setFormData({ id: '', name: '', price: 0, category: 'Teh' });
+    }
+    setShowProductForm(!showProductForm);
   };
 
   return (
@@ -145,7 +160,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout }) => {
       </header>
 
       {/* Security Settings Accordion */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 mb-6 overflow-hidden">
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 mb-4 overflow-hidden">
         <button 
           onClick={() => setShowPinForm(!showPinForm)}
           className="w-full p-4 flex justify-between items-center bg-gray-50 hover:bg-gray-100 transition-colors"
@@ -209,62 +224,69 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout }) => {
         )}
       </div>
 
-      {/* Form Tambah/Edit Produk */}
-      <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 mb-6 relative">
+      {/* Accordion Form Tambah/Edit Produk */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 mb-6 overflow-hidden relative">
         {isSaving && (
-          <div className="absolute inset-0 bg-white/50 z-10 flex items-center justify-center rounded-xl">
+          <div className="absolute inset-0 bg-white/50 z-20 flex items-center justify-center">
             <Loader2 className="animate-spin text-blue-600" />
           </div>
         )}
-        <h3 className="font-bold text-gray-700 mb-3 flex items-center">
-          {editingId ? <Edit2 size={16} className="mr-2"/> : <Plus size={16} className="mr-2"/>}
-          {editingId ? 'Edit Produk' : 'Tambah Produk Baru'}
-        </h3>
         
-        <form onSubmit={handleSaveProduct} className="space-y-3">
-          <div>
-            <label className="text-xs text-gray-500">Nama Produk</label>
-            <input
-              type="text"
-              value={formData.name}
-              onChange={e => setFormData({...formData, name: e.target.value})}
-              className="w-full border-b border-gray-300 py-1 focus:border-blue-500 outline-none text-sm font-medium"
-              placeholder="Contoh: Es Teh Manis"
-              required
-            />
+        <button 
+          onClick={toggleProductForm}
+          className={`w-full p-4 flex justify-between items-center transition-colors ${showProductForm ? 'bg-blue-50' : 'bg-gray-50 hover:bg-gray-100'}`}
+        >
+          <div className={`flex items-center font-bold text-sm ${editingId ? 'text-blue-600' : 'text-gray-700'}`}>
+            {editingId ? <Edit2 size={16} className="mr-2"/> : <Package size={16} className="mr-2 text-blue-500"/>}
+            {editingId ? 'Edit Produk' : 'Tambah Produk Baru'}
           </div>
-          
-          <div className="grid grid-cols-2 gap-4">
+          {showProductForm ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+        </button>
+
+        {showProductForm && (
+          <form onSubmit={handleSaveProduct} className="p-4 bg-white space-y-3 animate-fade-in border-t border-gray-100">
             <div>
-              <label className="text-xs text-gray-500">Kategori</label>
-              <select
-                value={formData.category}
-                onChange={e => setFormData({...formData, category: e.target.value})}
-                className="w-full border-b border-gray-300 py-1 focus:border-blue-500 outline-none text-sm bg-transparent"
-              >
-                <option value="Teh">Teh</option>
-                <option value="Kopi">Kopi</option>
-                <option value="Susu">Susu</option>
-                <option value="Coklat">Coklat</option>
-                <option value="Makanan">Makanan</option>
-                <option value="Lainnya">Lainnya</option>
-              </select>
-            </div>
-            <div>
-              <label className="text-xs text-gray-500">Harga (Rp)</label>
+              <label className="text-xs text-gray-500">Nama Produk</label>
               <input
-                type="number"
-                value={formData.price || ''}
-                onChange={e => setFormData({...formData, price: parseInt(e.target.value) || 0})}
+                type="text"
+                value={formData.name}
+                onChange={e => setFormData({...formData, name: e.target.value})}
                 className="w-full border-b border-gray-300 py-1 focus:border-blue-500 outline-none text-sm font-medium"
-                placeholder="0"
+                placeholder="Contoh: Es Teh Manis"
                 required
               />
             </div>
-          </div>
+            
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="text-xs text-gray-500">Kategori</label>
+                <select
+                  value={formData.category}
+                  onChange={e => setFormData({...formData, category: e.target.value})}
+                  className="w-full border-b border-gray-300 py-1 focus:border-blue-500 outline-none text-sm bg-transparent"
+                >
+                  <option value="Teh">Teh</option>
+                  <option value="Kopi">Kopi</option>
+                  <option value="Susu">Susu</option>
+                  <option value="Coklat">Coklat</option>
+                  <option value="Makanan">Makanan</option>
+                  <option value="Lainnya">Lainnya</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-xs text-gray-500">Harga (Rp)</label>
+                <input
+                  type="number"
+                  value={formData.price || ''}
+                  onChange={e => setFormData({...formData, price: parseInt(e.target.value) || 0})}
+                  className="w-full border-b border-gray-300 py-1 focus:border-blue-500 outline-none text-sm font-medium"
+                  placeholder="0"
+                  required
+                />
+              </div>
+            </div>
 
-          <div className="flex space-x-2 pt-2">
-            {editingId && (
+            <div className="flex space-x-2 pt-2">
               <button
                 type="button"
                 onClick={handleCancel}
@@ -272,16 +294,16 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout }) => {
               >
                 Batal
               </button>
-            )}
-            <button
-              type="submit"
-              disabled={isSaving}
-              className="flex-1 py-2 bg-blue-600 text-white rounded-lg text-sm font-bold hover:bg-blue-700 shadow-md shadow-blue-200 flex justify-center items-center"
-            >
-               {isSaving ? "Menyimpan..." : (editingId ? 'Simpan Perubahan' : 'Tambah Produk')}
-            </button>
-          </div>
-        </form>
+              <button
+                type="submit"
+                disabled={isSaving}
+                className="flex-1 py-2 bg-blue-600 text-white rounded-lg text-sm font-bold hover:bg-blue-700 shadow-md shadow-blue-200 flex justify-center items-center"
+              >
+                 {isSaving ? "Menyimpan..." : (editingId ? 'Simpan Perubahan' : 'Tambah Produk')}
+              </button>
+            </div>
+          </form>
+        )}
       </div>
 
       {/* List Produk */}

@@ -88,9 +88,13 @@ const App: React.FC = () => {
       case TabView.SHEET:
         return <SheetView transactions={transactions} purchases={purchases} onReload={loadData} />;
       case TabView.AI_ANALYSIS:
-        return <AIAnalyst transactions={transactions} purchases={purchases} />;
+        // Double check role for security
+        if (userRole === UserRole.ADMIN) {
+          return <AIAnalyst transactions={transactions} purchases={purchases} />;
+        }
+        return <Dashboard transactions={transactions} purchases={purchases} onLogout={handleLogout} userRole={userRole} />;
       case TabView.ADMIN_PANEL:
-        // Double check role
+        // Double check role for security
         if (userRole === UserRole.ADMIN) {
            return <AdminPanel onLogout={handleLogout} />;
         }

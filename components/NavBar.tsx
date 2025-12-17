@@ -9,15 +9,17 @@ interface NavBarProps {
 }
 
 const NavBar: React.FC<NavBarProps> = ({ activeTab, onTabChange, userRole }) => {
+  // Menu dasar yang bisa diakses semua role (termasuk kasir)
   const navItems = [
     { id: TabView.DASHBOARD, label: 'Beranda', icon: <LayoutDashboard size={24} /> },
     { id: TabView.INPUT, label: 'Jual', icon: <PlusCircle size={24} /> },
     { id: TabView.PURCHASE, label: 'Beli', icon: <ShoppingCart size={24} /> },
     { id: TabView.SHEET, label: 'Data', icon: <Table size={24} /> },
-    { id: TabView.AI_ANALYSIS, label: 'Analyst', icon: <Sparkles size={24} /> },
   ];
 
+  // Menu khusus Admin
   if (userRole === UserRole.ADMIN) {
+    navItems.push({ id: TabView.AI_ANALYSIS, label: 'Analyst', icon: <Sparkles size={24} /> });
     navItems.push({ id: TabView.ADMIN_PANEL, label: 'Admin', icon: <Settings size={24} /> });
   }
 
