@@ -37,7 +37,7 @@ const InputForm: React.FC<InputFormProps> = ({ onSave }) => {
     const cats = new Set(menuItems.map(p => p.category));
     // Sort specific categories if present
     const preferredOrder = ['Teh', 'Kopi', 'Susu', 'Coklat'];
-    const sortedCats = Array.from(cats).sort((a, b) => {
+    const sortedCats = Array.from(cats).sort((a: string, b: string) => {
        const indexA = preferredOrder.indexOf(a);
        const indexB = preferredOrder.indexOf(b);
        if (indexA !== -1 && indexB !== -1) return indexA - indexB;

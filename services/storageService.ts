@@ -228,10 +228,8 @@ export const addPurchase = async (purchase: Purchase): Promise<void> => {
 
 export const seedInitialData = () => {
   if (!localStorage.getItem(STORAGE_KEY) && !getApiUrl()) {
-    const initialData: Transaction[] = [
-      { id: '1', date: '2023-10-25T08:30:00', productName: 'Kopi Susu Gula Aren', category: 'Minuman', quantity: 2, price: 18000, total: 36000, paymentMethod: 'Cash' },
-      { id: '2', date: '2023-10-25T09:15:00', productName: 'Roti Bakar Coklat', category: 'Makanan', quantity: 1, price: 15000, total: 15000, paymentMethod: 'QRIS' },
-    ];
+    // Kosongkan data awal agar tidak ada "Kopi Susu Gula Aren" dan "Roti Bakar Coklat"
+    const initialData: Transaction[] = [];
     localStorage.setItem(STORAGE_KEY, JSON.stringify(initialData));
   }
 };
