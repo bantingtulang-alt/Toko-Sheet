@@ -1,18 +1,18 @@
 import React, { useEffect, useState } from "react";
 import { Store } from "lucide-react";
+import { SPLASH_IMAGE_PATH } from "./SplashImage";
 
 const SplashScreen: React.FC = () => {
   const [isVisible, setIsVisible] = useState(true);
   const [shouldRender, setShouldRender] = useState(true);
   const [imageError, setImageError] = useState(false);
 
-  // Menggunakan path relatif tanpa dot-slash untuk kompatibilitas lebih luas
-  const splashImage = "Splas_Screen.png";
-
   useEffect(() => {
-    // Splash screen muncul selama 3.5 detik
-    const timer = setTimeout(() => setIsVisible(false), 3500);
-    const removeTimer = setTimeout(() => setShouldRender(false), 4500);
+    // Log untuk debugging: membantu user melihat path mana yang sedang dicoba dimuat
+    console.log("Mencoba memuat splash screen dari:", SPLASH_IMAGE_PATH);
+
+    const timer = setTimeout(() => setIsVisible(false), 3000);
+    const removeTimer = setTimeout(() => setShouldRender(false), 4000);
 
     return () => {
       clearTimeout(timer);
@@ -35,19 +35,21 @@ const SplashScreen: React.FC = () => {
 
       <div className="relative z-10 flex flex-col items-center w-full h-full justify-center px-6">
         
-        {/* Container Gambar atau Ikon Cadangan */}
+        {/* Container Gambar Utama */}
         <div className="w-full max-w-[340px] aspect-[9/16] relative flex items-center justify-center">
           {!imageError ? (
             <img
-              src={splashImage}
+              src={SPLASH_IMAGE_PATH}
               alt="Welcome to TokoSheet AI"
               className="w-full h-full object-contain animate-[float_4s_infinite_ease-in-out] drop-shadow-[0_25px_50px_rgba(0,0,0,0.2)]"
               onLoad={(e) => {
-                (e.target as HTMLImageElement).style.opacity = "1";
+                const img = e.target as HTMLImageElement;
+                img.style.opacity = "1";
+                console.log("Gambar splash screen berhasil dimuat!");
               }}
-              onError={() => {
+              onError={(e) => {
                 setImageError(true);
-                console.warn("Gambar 'Splas_Screen.png' tidak ditemukan. Menampilkan ikon cadangan.");
+                console.error(`Gagal memuat gambar di path: ${SPLASH_IMAGE_PATH}. Pastikan file ada di root folder dan namanya tepat.`);
               }}
             />
           ) : (
@@ -56,12 +58,12 @@ const SplashScreen: React.FC = () => {
               <div className="bg-white/30 backdrop-blur-md p-10 rounded-full border border-white/50 shadow-2xl mb-8">
                 <Store size={80} className="text-white drop-shadow-lg" />
               </div>
-              <p className="text-white/60 text-xs font-medium italic">Logo TokoSheet AI</p>
+              <p className="text-white/60 text-xs font-medium italic">Toko Sheet AI</p>
             </div>
           )}
         </div>
 
-        {/* Branding Branding */}
+        {/* Branding */}
         <div className="absolute bottom-20 flex flex-col items-center animate-[slideUp_1.2s_ease-out]">
           <div className="bg-white/20 backdrop-blur-xl px-8 py-4 rounded-[2rem] border border-white/40 shadow-[0_8px_32px_rgba(0,0,0,0.1)] flex flex-col items-center">
              <h1 className="text-3xl font-black text-white tracking-tight drop-shadow-lg">

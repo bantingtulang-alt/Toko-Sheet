@@ -1,2 +1,3 @@
-// Path ke file gambar splash screen (tanpa dot-slash)
-export const SPLASH_IMAGE_PATH = "Splas_Screen.png";
+// Path ke file gambar splash screen (sesuai perubahan nama file Anda)
+// Menggunakan / di depan untuk memastikan browser mencari dari root folder
+export const SPLASH_IMAGE_PATH = "/splas.png";

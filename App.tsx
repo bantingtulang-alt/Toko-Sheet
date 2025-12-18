@@ -43,10 +43,10 @@ const App: React.FC = () => {
     seedInitialData();
     loadData();
     
-    // Matikan splash screen setelah delay agar transisi terasa halus
+    // Matikan splash screen setelah 4 detik (sinkron dengan SplashScreen.tsx)
     const splashTimer = setTimeout(() => {
       setShowSplash(false);
-    }, 3000);
+    }, 4000);
 
     return () => clearTimeout(splashTimer);
   }, []);
