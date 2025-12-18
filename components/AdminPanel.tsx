@@ -6,9 +6,10 @@ import { Plus, Trash2, Edit2, LogOut, RefreshCw, Loader2, Key, Lock, ChevronDown
 
 interface AdminPanelProps {
   onLogout: () => void;
+  onRefreshApp: () => Promise<void>;
 }
 
-const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout }) => {
+const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout, onRefreshApp }) => {
   const [products, setProducts] = useState<Product[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -51,10 +52,28 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout }) => {
     setIsLoading(false);
   };
 
-  const handleSaveConfig = () => {
-    saveApiUrl(apiUrl);
-    alert('Konfigurasi berhasil disimpan.');
-    setShowConfigForm(false);
+  const handleSaveConfig = async () => {
+    if (!apiUrl.trim()) {
+      alert('Masukkan URL Web App terlebih dahulu.');
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      saveApiUrl(apiUrl);
+      // Pemicu refresh data global (Sales & Purchases di App.tsx)
+      await onRefreshApp();
+      // Pemicu refresh data lokal (Products di panel ini)
+      await loadProducts();
+      
+      alert('Konfigurasi disimpan & Data otomatis diperbarui!');
+      setShowConfigForm(false);
+    } catch (error) {
+      console.error(error);
+      alert('Gagal memperbarui data. Pastikan URL benar.');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const appScriptCode = `

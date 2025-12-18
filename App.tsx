@@ -93,7 +93,7 @@ const App: React.FC = () => {
                   {activeTab === TabView.PURCHASE && <PurchaseView purchases={purchases} onReload={loadData} />}
                   {activeTab === TabView.SHEET && <SheetView transactions={transactions} purchases={purchases} onReload={loadData} />}
                   {activeTab === TabView.AI_ANALYSIS && userRole === UserRole.ADMIN && <AIAnalyst transactions={transactions} purchases={purchases} />}
-                  {activeTab === TabView.ADMIN_PANEL && userRole === UserRole.ADMIN && <AdminPanel onLogout={handleLogout} />}
+                  {activeTab === TabView.ADMIN_PANEL && userRole === UserRole.ADMIN && <AdminPanel onLogout={handleLogout} onRefreshApp={loadData} />}
                 </>
               )}
             </>

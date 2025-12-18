@@ -23,6 +23,9 @@ const SplashScreen: React.FC = () => {
 
   if (!shouldRender) return null;
 
+  // Menggunakan URL direct download dari Google Drive ID yang diberikan
+  const imageUrl = "https://drive.google.com/uc?export=download&id=1J0zou08tsVNPOpanRNKJ2Pvb1_sx_XpP";
+
   return (
     <div 
       className={`fixed inset-0 z-[100] flex flex-col items-center justify-center bg-[#c1e0ff] transition-opacity duration-500 ease-in-out ${
@@ -33,12 +36,16 @@ const SplashScreen: React.FC = () => {
       <div className="absolute inset-0 bg-gradient-to-b from-[#c1e0ff] to-white opacity-50"></div>
 
       <div className="relative z-10 flex flex-col items-center px-6">
-        {/* Gambar 3D (Menggunakan URL gambar yang diupload) */}
+        {/* Gambar Splash Screen Baru */}
         <div className="w-64 h-auto mb-8 animate-[bounce_3s_infinite] drop-shadow-2xl">
           <img 
-            src="https://files.oaiusercontent.com/file-KByXW3v5mXmGv7mSExbQWv?se=2025-02-23T10%3A58%3A20Z&sp=r&sv=2024-08-04&sr=b&rscc=max-age%3D604800%2C%20immutable%2C%20private&rscd=attachment%3B%20filename%3D1263d916-d867-4638-8c1a-ecf05eb1434c.webp&sig=G06lWbK6S%2B0S461t9oNfB2fG/I65e1jS3vTjOn9900k%3D" 
+            src={imageUrl} 
             alt="TokoSheet Splash" 
             className="w-full h-full object-contain scale-110 animate-[pulse_2s_infinite]"
+            onError={(e) => {
+              // Fallback jika direct link Google Drive terblokir CORS (biasanya untuk demo lokal bisa butuh proxy)
+              console.error("Gagal memuat gambar splash screen");
+            }}
           />
         </div>
 
