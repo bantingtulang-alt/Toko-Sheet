@@ -88,11 +88,11 @@ const AIAnalyst: React.FC<AIAnalystProps> = ({ transactions, purchases }) => {
       <header className="mb-4 flex items-center justify-between flex-shrink-0">
         <div className="flex items-center space-x-2">
             <div className="p-2 bg-purple-100 rounded-lg">
-            <Sparkles className="text-purple-600" size={24} />
+            <Sparkles className="text-purple-600" size={20} />
             </div>
             <div>
-                <h1 className="text-xl font-bold text-gray-800">Analyst</h1>
-                <p className="text-gray-500 text-xs">AI Assistant</p>
+                <h1 className="text-lg font-bold text-gray-800">Analyst</h1>
+                <p className="text-gray-500 text-[10px]">AI Assistant</p>
             </div>
         </div>
 
@@ -101,96 +101,101 @@ const AIAnalyst: React.FC<AIAnalystProps> = ({ transactions, purchases }) => {
             <select 
                 value={filterPeriod}
                 onChange={(e) => setFilterPeriod(e.target.value as Period)}
-                className="appearance-none bg-white border border-purple-200 text-purple-700 text-xs font-bold py-2 pl-3 pr-8 rounded-lg outline-none focus:ring-2 focus:ring-purple-500 shadow-sm"
+                className="appearance-none bg-white border border-purple-200 text-purple-700 text-[10px] font-bold py-1.5 pl-2.5 pr-7 rounded-lg outline-none focus:ring-2 focus:ring-purple-500 shadow-sm"
             >
                 <option value="today">Hari Ini</option>
                 <option value="month">Bulan Ini</option>
-                <option value="all">Semua Data</option>
+                <option value="all">Semua</option>
             </select>
-            <Filter size={14} className="absolute right-2 top-2.5 text-purple-500 pointer-events-none" />
+            <Filter size={12} className="absolute right-2 top-2 text-purple-500 pointer-events-none" />
         </div>
       </header>
 
-      {/* Financial Summary Cards */}
-      <div className="mb-4 space-y-3 flex-shrink-0">
-        {/* Net Profit - Highlighted */}
-        <div className="bg-gradient-to-br from-green-500 to-green-600 text-white p-4 rounded-xl shadow-md relative overflow-hidden transition-all duration-300">
-             <div className="absolute right-0 top-0 opacity-20 p-2"><DollarSign size={60}/></div>
-             <p className="text-green-100 text-xs font-medium mb-1">
-                {filterPeriod === 'today' ? 'Profit Hari Ini' : filterPeriod === 'month' ? 'Profit Bulan Ini' : 'Total Profit'}
-             </p>
-             <h2 className="text-2xl font-bold">Rp {stats.netProfit.toLocaleString('id-ID')}</h2>
-        </div>
+      {/* Financial Summary Cards - 3 Columns Layout */}
+      <div className="mb-4 flex-shrink-0">
+        <div className="grid grid-cols-3 gap-2">
+          {/* Net Profit Card */}
+          <div className="bg-gradient-to-br from-green-500 to-green-600 text-white p-2.5 rounded-xl shadow-sm flex flex-col justify-between">
+             <div>
+                <p className="text-[9px] font-medium text-green-100 mb-0.5 truncate">Profit</p>
+                <div className="text-xs font-bold truncate">Rp {stats.netProfit.toLocaleString('id-ID')}</div>
+             </div>
+             <div className="mt-1 flex items-center justify-end opacity-40">
+                <DollarSign size={14} />
+             </div>
+          </div>
 
-        {/* Sales & Purchases Grid */}
-        <div className="grid grid-cols-2 gap-3">
-             {/* Total Sales */}
-            <div className="bg-white p-3 rounded-xl shadow-sm border border-gray-100">
-                <div className="flex items-center space-x-2 mb-1 text-blue-600">
-                   <TrendingUp size={16} />
-                   <p className="text-gray-500 text-[10px] font-medium">Penjualan</p>
-                </div>
-                <h2 className="text-lg font-bold text-gray-800">Rp {stats.totalSales.toLocaleString('id-ID')}</h2>
-                <p className="text-[10px] text-gray-400 mt-1">{stats.totalSalesCount} Transaksi</p>
+          {/* Sales Card */}
+          <div className="bg-white p-2.5 rounded-xl shadow-sm border border-gray-100 flex flex-col justify-between">
+            <div>
+              <p className="text-[9px] font-medium text-gray-500 mb-0.5 truncate">Penjualan</p>
+              <div className="text-xs font-bold text-gray-800 truncate">Rp {stats.totalSales.toLocaleString('id-ID')}</div>
             </div>
+            <div className="mt-1 flex items-center justify-between text-blue-500">
+               <span className="text-[8px] font-bold">{stats.totalSalesCount}x</span>
+               <TrendingUp size={14} />
+            </div>
+          </div>
 
-             {/* Total Purchases */}
-             <div className="bg-white p-3 rounded-xl shadow-sm border border-gray-100">
-                <div className="flex items-center space-x-2 mb-1 text-orange-500">
-                   <TrendingDown size={16} />
-                   <p className="text-gray-500 text-[10px] font-medium">Pengeluaran</p>
-                </div>
-                <h2 className="text-lg font-bold text-gray-800">Rp {stats.totalPurchases.toLocaleString('id-ID')}</h2>
-                 <p className="text-[10px] text-gray-400 mt-1">{stats.totalPurchasesCount} Transaksi</p>
+          {/* Purchases Card */}
+          <div className="bg-white p-2.5 rounded-xl shadow-sm border border-gray-100 flex flex-col justify-between">
+            <div>
+              <p className="text-[9px] font-medium text-gray-500 mb-0.5 truncate">Pengeluaran</p>
+              <div className="text-xs font-bold text-gray-800 truncate">Rp {stats.totalPurchases.toLocaleString('id-ID')}</div>
             </div>
+            <div className="mt-1 flex items-center justify-between text-orange-500">
+               <span className="text-[8px] font-bold">{stats.totalPurchasesCount}x</span>
+               <TrendingDown size={14} />
+            </div>
+          </div>
         </div>
 
         {/* Sales by Method Breakdown */}
-        <div className="bg-white p-3 rounded-xl shadow-sm border border-gray-100">
-            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider mb-2">Penjualan per Metode (Klik untuk detail)</p>
+        <div className="bg-white p-2.5 rounded-xl shadow-sm border border-gray-100 mt-2">
+            <p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider mb-2">Metode Pembayaran</p>
             <div className="grid grid-cols-3 gap-2">
                 <button 
                     onClick={() => setSelectedMethod('Cash')}
-                    className="bg-green-50 p-2 rounded-lg text-center border border-green-100 hover:bg-green-100 transition-colors active:scale-95 cursor-pointer"
+                    className="bg-green-50 p-1.5 rounded-lg text-center border border-green-100 hover:bg-green-100 transition-colors active:scale-95"
                 >
-                    <Wallet size={16} className="mx-auto text-green-600 mb-1"/>
-                    <div className="text-[10px] text-green-700 font-medium">Cash</div>
-                    <div className="text-xs font-bold text-gray-800">{stats.byMethod.Cash.toLocaleString('id-ID')}</div>
+                    <Wallet size={12} className="mx-auto text-green-600 mb-0.5"/>
+                    <div className="text-[8px] text-green-700 font-medium">Cash</div>
+                    <div className="text-[10px] font-bold text-gray-800">{stats.byMethod.Cash.toLocaleString('id-ID')}</div>
                 </button>
                 <button 
                     onClick={() => setSelectedMethod('QRIS')}
-                    className="bg-blue-50 p-2 rounded-lg text-center border border-blue-100 hover:bg-blue-100 transition-colors active:scale-95 cursor-pointer"
+                    className="bg-blue-50 p-1.5 rounded-lg text-center border border-blue-100 hover:bg-blue-100 transition-colors active:scale-95"
                 >
-                    <QrCode size={16} className="mx-auto text-blue-600 mb-1"/>
-                    <div className="text-[10px] text-blue-700 font-medium">QRIS</div>
-                    <div className="text-xs font-bold text-gray-800">{stats.byMethod.QRIS.toLocaleString('id-ID')}</div>
+                    <QrCode size={12} className="mx-auto text-blue-600 mb-0.5"/>
+                    <div className="text-[8px] text-blue-700 font-medium">QRIS</div>
+                    <div className="text-[10px] font-bold text-gray-800">{stats.byMethod.QRIS.toLocaleString('id-ID')}</div>
                 </button>
                  <button 
                     onClick={() => setSelectedMethod('Transfer')}
-                    className="bg-purple-50 p-2 rounded-lg text-center border border-purple-100 hover:bg-purple-100 transition-colors active:scale-95 cursor-pointer"
+                    className="bg-purple-50 p-1.5 rounded-lg text-center border border-purple-100 hover:bg-purple-100 transition-colors active:scale-95"
                 >
-                    <Smartphone size={16} className="mx-auto text-purple-600 mb-1"/>
-                    <div className="text-[10px] text-purple-700 font-medium">Transfer</div>
-                    <div className="text-xs font-bold text-gray-800">{stats.byMethod.Transfer.toLocaleString('id-ID')}</div>
+                    <Smartphone size={12} className="mx-auto text-purple-600 mb-0.5"/>
+                    <div className="text-[8px] text-purple-700 font-medium">Bank</div>
+                    <div className="text-[10px] font-bold text-gray-800">{stats.byMethod.Transfer.toLocaleString('id-ID')}</div>
                 </button>
             </div>
         </div>
       </div>
 
       {/* Chat Area */}
-      <div className="flex-1 bg-white rounded-2xl shadow-sm border border-gray-100 p-4 mb-4 overflow-y-auto relative min-h-0">
+      <div className="flex-1 bg-white rounded-2xl shadow-sm border border-gray-100 p-4 mb-3 overflow-y-auto relative min-h-0">
         {response ? (
           <div className="prose prose-sm max-w-none text-gray-700 text-sm">
              <div className="flex items-center space-x-2 mb-3 text-purple-600 font-bold border-b pb-2">
-                <Bot size={20} />
+                <Bot size={18} />
                 <span>Analisa TokoSheet</span>
              </div>
              <ReactMarkdown>{response}</ReactMarkdown>
           </div>
         ) : (
           <div className="h-full flex flex-col justify-center items-center text-center text-gray-400">
-            <Bot size={32} className="mb-2 text-gray-200" />
-            <p className="text-xs">
+            <Bot size={28} className="mb-2 text-gray-200" />
+            <p className="text-[10px]">
                 Tanyakan sesuatu tentang data <br/>
                 <span className="font-bold text-purple-600">
                     {filterPeriod === 'today' ? 'Hari Ini' : filterPeriod === 'month' ? 'Bulan Ini' : 'Sepanjang Waktu'}
@@ -207,7 +212,7 @@ const AIAnalyst: React.FC<AIAnalystProps> = ({ transactions, purchases }) => {
                 <button 
                     key={i}
                     onClick={() => setQuery(s)}
-                    className="flex-shrink-0 bg-white border border-purple-100 text-purple-600 text-[10px] px-3 py-1.5 rounded-full whitespace-nowrap hover:bg-purple-50"
+                    className="flex-shrink-0 bg-white border border-purple-100 text-purple-600 text-[9px] px-2.5 py-1.5 rounded-full whitespace-nowrap hover:bg-purple-50"
                 >
                     {s}
                 </button>
@@ -221,16 +226,16 @@ const AIAnalyst: React.FC<AIAnalystProps> = ({ transactions, purchases }) => {
           type="text"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder={`Tanya AI tentang data ${filterPeriod === 'today' ? 'hari ini' : '...'}`}
-          className="w-full pl-4 pr-12 py-3 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none shadow-sm text-sm"
+          placeholder={`Tanya AI...`}
+          className="w-full pl-4 pr-12 py-2.5 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none shadow-sm text-sm"
           onKeyDown={(e) => e.key === 'Enter' && handleAnalyze()}
         />
         <button
           onClick={handleAnalyze}
           disabled={isLoading || !query.trim()}
-          className="absolute right-2 top-2 p-1.5 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+          className="absolute right-1.5 top-1.5 p-1.5 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
         >
-          {isLoading ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
+          {isLoading ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
         </button>
       </div>
 
@@ -245,7 +250,7 @@ const AIAnalyst: React.FC<AIAnalystProps> = ({ transactions, purchases }) => {
                      {selectedMethod === 'QRIS' && <QrCode size={18} className="text-blue-600" />}
                      {selectedMethod === 'Transfer' && <Smartphone size={18} className="text-purple-600" />}
                      <h3 className="font-bold text-gray-800">
-                        {selectedMethod} ({filterPeriod === 'today' ? 'Hari Ini' : filterPeriod === 'month' ? 'Bulan Ini' : 'Semua'})
+                        {selectedMethod}
                      </h3>
                   </div>
                   <button 

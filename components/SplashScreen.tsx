@@ -1,19 +1,18 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState } from "react";
+import { Store } from "lucide-react";
 
 const SplashScreen: React.FC = () => {
   const [isVisible, setIsVisible] = useState(true);
   const [shouldRender, setShouldRender] = useState(true);
+  const [imageError, setImageError] = useState(false);
+
+  // Menggunakan path relatif tanpa dot-slash untuk kompatibilitas lebih luas
+  const splashImage = "Splas_Screen.png";
 
   useEffect(() => {
-    // Mulai animasi keluar setelah 2.5 detik
-    const timer = setTimeout(() => {
-      setIsVisible(false);
-    }, 2500);
-
-    // Hapus dari DOM setelah animasi fade-out selesai (total 3 detik)
-    const removeTimer = setTimeout(() => {
-      setShouldRender(false);
-    }, 3000);
+    // Splash screen muncul selama 3.5 detik
+    const timer = setTimeout(() => setIsVisible(false), 3500);
+    const removeTimer = setTimeout(() => setShouldRender(false), 4500);
 
     return () => {
       clearTimeout(timer);
@@ -23,55 +22,76 @@ const SplashScreen: React.FC = () => {
 
   if (!shouldRender) return null;
 
-  // Menggunakan URL direct download dari Google Drive ID yang diberikan
-  const imageUrl = "Splas_Screen.png";
-
   return (
-    <div 
-      className={`fixed inset-0 z-[100] flex flex-col items-center justify-center bg-[#c1e0ff] transition-opacity duration-500 ease-in-out ${
-        isVisible ? 'opacity-100' : 'opacity-0'
-      }`}
+    <div
+      className={`fixed inset-0 z-[100] flex flex-col items-center justify-center 
+      bg-gradient-to-b from-[#87b9f5] via-[#a5cdff] to-[#c1e0ff]
+      transition-opacity duration-1000 ease-in-out
+      ${isVisible ? "opacity-100" : "opacity-0"}`}
     >
-      {/* Background Glow */}
-      <div className="absolute inset-0 bg-gradient-to-b from-[#c1e0ff] to-white opacity-50"></div>
+      {/* Efek Cahaya Latar Belakang */}
+      <div className="absolute top-[-10%] left-[-10%] w-72 h-72 bg-white/30 rounded-full blur-[100px] animate-pulse"></div>
+      <div className="absolute bottom-[-10%] right-[-10%] w-96 h-96 bg-blue-400/20 rounded-full blur-[120px] animate-pulse delay-1000"></div>
 
-      <div className="relative z-10 flex flex-col items-center px-6">
-        {/* Gambar Splash Screen Baru */}
-        <div className="w-64 h-auto mb-8 animate-[bounce_3s_infinite] drop-shadow-2xl">
-          <img 
-            src={imageUrl} 
-            alt="TokoSheet Splash" 
-            className="w-full h-full object-contain scale-110 animate-[pulse_2s_infinite]"
-            onError={(e) => {
-              // Fallback jika direct link Google Drive terblokir CORS (biasanya untuk demo lokal bisa butuh proxy)
-              console.error("Gagal memuat gambar splash screen");
-            }}
-          />
+      <div className="relative z-10 flex flex-col items-center w-full h-full justify-center px-6">
+        
+        {/* Container Gambar atau Ikon Cadangan */}
+        <div className="w-full max-w-[340px] aspect-[9/16] relative flex items-center justify-center">
+          {!imageError ? (
+            <img
+              src={splashImage}
+              alt="Welcome to TokoSheet AI"
+              className="w-full h-full object-contain animate-[float_4s_infinite_ease-in-out] drop-shadow-[0_25px_50px_rgba(0,0,0,0.2)]"
+              onLoad={(e) => {
+                (e.target as HTMLImageElement).style.opacity = "1";
+              }}
+              onError={() => {
+                setImageError(true);
+                console.warn("Gambar 'Splas_Screen.png' tidak ditemukan. Menampilkan ikon cadangan.");
+              }}
+            />
+          ) : (
+            // Tampilan Cadangan jika Gambar Gagal Dimuat
+            <div className="flex flex-col items-center justify-center animate-[float_4s_infinite_ease-in-out]">
+              <div className="bg-white/30 backdrop-blur-md p-10 rounded-full border border-white/50 shadow-2xl mb-8">
+                <Store size={80} className="text-white drop-shadow-lg" />
+              </div>
+              <p className="text-white/60 text-xs font-medium italic">Logo TokoSheet AI</p>
+            </div>
+          )}
         </div>
 
-        {/* Branding */}
-        <div className="text-center transform translate-y-4 animate-[slideUp_0.8s_ease-out_forwards]">
-          <h1 className="text-4xl font-extrabold text-blue-800 tracking-tight">
-            TokoSheet <span className="text-orange-500">AI</span>
-          </h1>
-          <p className="text-blue-600/70 font-medium mt-1">Smart POS Solution</p>
-        </div>
-
-        {/* Loading Bar Anim */}
-        <div className="mt-12 w-32 h-1.5 bg-blue-100 rounded-full overflow-hidden">
-          <div className="h-full bg-blue-600 animate-[loading_2s_ease-in-out_infinite]"></div>
+        {/* Branding Branding */}
+        <div className="absolute bottom-20 flex flex-col items-center animate-[slideUp_1.2s_ease-out]">
+          <div className="bg-white/20 backdrop-blur-xl px-8 py-4 rounded-[2rem] border border-white/40 shadow-[0_8px_32px_rgba(0,0,0,0.1)] flex flex-col items-center">
+             <h1 className="text-3xl font-black text-white tracking-tight drop-shadow-lg">
+               TokoSheet <span className="text-orange-400">AI</span>
+             </h1>
+             <div className="h-[2px] w-12 bg-orange-400/60 mt-1 rounded-full"></div>
+          </div>
+          
+          <p className="text-blue-900/60 mt-4 font-bold tracking-[0.3em] text-[10px] uppercase">
+            Smart Retail Solution
+          </p>
+          
+          <div className="mt-8 w-32 h-1 bg-white/30 rounded-full overflow-hidden shadow-inner">
+            <div className="h-full bg-white shadow-[0_0_8px_white] animate-[loading_2s_infinite_ease-in-out]"></div>
+          </div>
         </div>
       </div>
 
       <style>{`
-        @keyframes slideUp {
-          from { opacity: 0; transform: translateY(30px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
         @keyframes loading {
-          0% { width: 0%; transform: translateX(-100%); }
-          50% { width: 70%; transform: translateX(50%); }
-          100% { width: 0%; transform: translateX(200%); }
+          0% { transform: translateX(-100%); }
+          100% { transform: translateX(100%); }
+        }
+        @keyframes float {
+          0%, 100% { transform: translateY(0) scale(1); }
+          50% { transform: translateY(-20px) scale(1.03); }
+        }
+        @keyframes slideUp {
+          0% { opacity: 0; transform: translateY(40px); }
+          100% { opacity: 1; transform: translateY(0); }
         }
       `}</style>
     </div>
