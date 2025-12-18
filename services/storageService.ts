@@ -4,6 +4,7 @@ const STORAGE_KEY = 'tokosheet_data';
 const PURCHASE_KEY = 'tokosheet_purchases';
 const API_URL_KEY = 'tokosheet_api_url';
 const ADMIN_PIN_KEY = 'tokosheet_admin_pin';
+const CASHIER_PIN_KEY = 'tokosheet_cashier_pin';
 
 // Helper untuk mendapatkan URL
 export const getApiUrl = (): string => {
@@ -14,12 +15,15 @@ export const saveApiUrl = (url: string) => {
   localStorage.setItem(API_URL_KEY, url);
 };
 
-// --- ADMIN PIN MANAGEMENT ---
+// --- SETTINGS MANAGEMENT (ADMIN & CASHIER PIN) ---
 
-export const fetchAdminPin = async (): Promise<string> => {
+export const fetchSettings = async (): Promise<{ adminPin: string, cashierPin: string }> => {
   const apiUrl = getApiUrl();
-  
-  // Coba ambil dari Cloud
+  const defaultSettings = {
+    adminPin: localStorage.getItem(ADMIN_PIN_KEY) || '1234',
+    cashierPin: localStorage.getItem(CASHIER_PIN_KEY) || '0000'
+  };
+
   if (apiUrl) {
     try {
       const separator = apiUrl.includes('?') ? '&' : '?';
@@ -27,31 +31,47 @@ export const fetchAdminPin = async (): Promise<string> => {
       
       if (response.ok) {
         const json = await response.json();
-        if (json.status === 'success' && json.pin) {
-          // Sync ke local storage agar offline tetap jalan dengan PIN terbaru yg diketahui
-          localStorage.setItem(ADMIN_PIN_KEY, String(json.pin));
-          return String(json.pin);
+        if (json.status === 'success') {
+          // Sync ke local storage
+          const aPin = String(json.adminPin || defaultSettings.adminPin);
+          const cPin = String(json.cashierPin || defaultSettings.cashierPin);
+          
+          localStorage.setItem(ADMIN_PIN_KEY, aPin);
+          localStorage.setItem(CASHIER_PIN_KEY, cPin);
+          
+          return { adminPin: aPin, cashierPin: cPin };
         }
       }
     } catch (error) {
-      console.error("Gagal ambil PIN dari cloud, menggunakan cache lokal", error);
+      console.error("Gagal ambil settings dari cloud, menggunakan cache lokal", error);
     }
   }
 
-  // Fallback ke LocalStorage atau Default
-  return localStorage.getItem(ADMIN_PIN_KEY) || '1234';
+  return defaultSettings;
 };
 
-export const saveAdminPin = async (newPin: string): Promise<boolean> => {
-  // Simpan Lokal dulu
-  localStorage.setItem(ADMIN_PIN_KEY, newPin);
+export const fetchAdminPin = async (): Promise<string> => {
+  const settings = await fetchSettings();
+  return settings.adminPin;
+};
+
+export const fetchCashierPin = async (): Promise<string> => {
+  const settings = await fetchSettings();
+  return settings.cashierPin;
+};
+
+export const saveSetting = async (key: 'ADMIN_PIN' | 'CASHIER_PIN', value: string): Promise<boolean> => {
+  // Simpan Lokal
+  const localKey = key === 'ADMIN_PIN' ? ADMIN_PIN_KEY : CASHIER_PIN_KEY;
+  localStorage.setItem(localKey, value);
   
   const apiUrl = getApiUrl();
   if (apiUrl) {
     try {
       const payload = {
-        action: 'update_pin',
-        pin: newPin
+        action: 'update_setting',
+        key: key,
+        value: value
       };
 
       await fetch(apiUrl, {
@@ -61,11 +81,11 @@ export const saveAdminPin = async (newPin: string): Promise<boolean> => {
       });
       return true;
     } catch (error) {
-      console.error("Gagal simpan PIN ke cloud:", error);
+      console.error(`Gagal simpan ${key} ke cloud:`, error);
       return false; 
     }
   }
-  return true; // Dianggap sukses jika offline (tersimpan lokal)
+  return true;
 };
 
 // --- DATA FETCHING (SALES) ---
@@ -73,24 +93,15 @@ export const saveAdminPin = async (newPin: string): Promise<boolean> => {
 export const fetchTransactions = async (): Promise<Transaction[]> => {
   const apiUrl = getApiUrl();
 
-  // Mode Online (Google Sheet)
   if (apiUrl) {
     try {
       const separator = apiUrl.includes('?') ? '&' : '?';
-      // Default type is sales if not specified by script, but we send explicit type just in case script updates
       const urlWithCacheBuster = `${apiUrl}${separator}type=sales&t=${Date.now()}`;
-
       const response = await fetch(urlWithCacheBuster);
       
-      const contentType = response.headers.get("content-type");
-      if (contentType && contentType.includes("text/html")) {
-        throw new Error("URL mengembalikan HTML. Pastikan 'Who has access' diatur ke 'Anyone' saat Deploy.");
-      }
-
       if (!response.ok) throw new Error(`HTTP Error: ${response.status}`);
       
       const data = await response.json();
-      
       if (data.status === 'success' && Array.isArray(data.data)) {
         return data.data
           .filter((row: any) => row[0] && row[2]) 
@@ -102,7 +113,7 @@ export const fetchTransactions = async (): Promise<Transaction[]> => {
             quantity: Number(row[4]) || 0,
             price: Number(row[5]) || 0,
             total: Number(row[6]) || 0,
-            paymentMethod: row[7] || 'Cash' // Col 7 is payment method
+            paymentMethod: row[7] || 'Cash'
           }))
           .reverse(); 
       }
@@ -112,8 +123,6 @@ export const fetchTransactions = async (): Promise<Transaction[]> => {
       throw error; 
     }
   } 
-  
-  // Mode Offline (LocalStorage)
   else {
     return new Promise((resolve) => {
       const data = localStorage.getItem(STORAGE_KEY);
@@ -122,22 +131,15 @@ export const fetchTransactions = async (): Promise<Transaction[]> => {
   }
 };
 
-// --- DATA FETCHING (PURCHASES) ---
-
 export const fetchPurchases = async (): Promise<Purchase[]> => {
   const apiUrl = getApiUrl();
-
   if (apiUrl) {
     try {
       const separator = apiUrl.includes('?') ? '&' : '?';
-      // Request type=purchases
       const urlWithCacheBuster = `${apiUrl}${separator}type=purchases&t=${Date.now()}`;
-
       const response = await fetch(urlWithCacheBuster);
       if (!response.ok) throw new Error(`HTTP Error: ${response.status}`);
-      
       const data = await response.json();
-      
       if (data.status === 'success' && Array.isArray(data.data)) {
         return data.data
           .filter((row: any) => row[0] && row[2])
@@ -145,7 +147,7 @@ export const fetchPurchases = async (): Promise<Purchase[]> => {
             id: String(row[0]),
             date: String(row[1]),
             itemName: String(row[2]),
-            supplier: String(row[3]), // Assuming col 4 is supplier
+            supplier: String(row[3]),
             quantity: Number(row[4]) || 0,
             price: Number(row[5]) || 0,
             total: Number(row[6]) || 0
@@ -155,7 +157,7 @@ export const fetchPurchases = async (): Promise<Purchase[]> => {
       return [];
     } catch (error) {
       console.error("Fetch Purchases Error:", error);
-      return []; // Return empty on error to avoid breaking UI
+      return [];
     }
   } else {
     return new Promise((resolve) => {
@@ -165,11 +167,8 @@ export const fetchPurchases = async (): Promise<Purchase[]> => {
   }
 };
 
-// --- DATA SAVING ---
-
 export const addTransaction = async (transaction: Transaction): Promise<void> => {
   const apiUrl = getApiUrl();
-
   if (apiUrl) {
     const payload = {
       action: 'add_sale', 
@@ -181,10 +180,9 @@ export const addTransaction = async (transaction: Transaction): Promise<void> =>
         transaction.quantity,
         transaction.price,
         transaction.total,
-        transaction.paymentMethod // Add payment method to end of array
+        transaction.paymentMethod
       ]
     };
-
     await fetch(apiUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
@@ -199,7 +197,6 @@ export const addTransaction = async (transaction: Transaction): Promise<void> =>
 
 export const addPurchase = async (purchase: Purchase): Promise<void> => {
   const apiUrl = getApiUrl();
-
   if (apiUrl) {
     const payload = {
       action: 'add_purchase',
@@ -213,7 +210,6 @@ export const addPurchase = async (purchase: Purchase): Promise<void> => {
         purchase.total
       ]
     };
-
     await fetch(apiUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
@@ -228,8 +224,6 @@ export const addPurchase = async (purchase: Purchase): Promise<void> => {
 
 export const seedInitialData = () => {
   if (!localStorage.getItem(STORAGE_KEY) && !getApiUrl()) {
-    // Kosongkan data awal agar tidak ada "Kopi Susu Gula Aren" dan "Roti Bakar Coklat"
-    const initialData: Transaction[] = [];
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(initialData));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify([]));
   }
 };
