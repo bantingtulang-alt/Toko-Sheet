@@ -24,7 +24,7 @@ const SplashScreen: React.FC = () => {
   if (!shouldRender) return null;
 
   // Menggunakan URL direct download dari Google Drive ID yang diberikan
-  const imageUrl = "https://drive.google.com/uc?export=download&id=1J0zou08tsVNPOpanRNKJ2Pvb1_sx_XpP";
+  const imageUrl = "Splas_Screen.png";
 
   return (
     <div 
