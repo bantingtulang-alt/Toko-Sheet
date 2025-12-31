@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Product } from '../types';
+import { Product, UserRole, CupItem } from '../types';
 import { fetchProducts, saveProductList } from '../services/productService';
-import { getApiUrl, saveApiUrl, fetchAdminPin, fetchCashierPin, saveSetting } from '../services/storageService';
-import { Plus, Trash2, Edit2, LogOut, RefreshCw, Loader2, Key, Lock, ChevronDown, ChevronUp, Package, Link as LinkIcon, Check, Copy, User } from 'lucide-react';
+import { getApiUrl, saveApiUrl, fetchAdminPin, fetchCashierPin, fetchCupItems, saveSetting, resetData } from '../services/storageService';
+import { Plus, Trash2, Edit2, LogOut, RefreshCw, Loader2, Key, Lock, ChevronDown, ChevronUp, Package, Link as LinkIcon, Coffee, Trash, AlertTriangle, ShieldCheck, User, X } from 'lucide-react';
 
 interface AdminPanelProps {
   onLogout: () => void;
@@ -20,57 +20,109 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout, onRefreshApp }) => {
   const [showTutorial, setShowTutorial] = useState(false);
 
   const [showProductForm, setShowProductForm] = useState(false);
-  const [formData, setFormData] = useState<Product>({
-    id: '',
-    name: '',
-    price: 0,
-    category: 'Teh'
-  });
+  const [formData, setFormData] = useState<Product>({ id: '', name: '', price: 0, category: 'Teh' });
 
-  const [showPinForm, setShowPinForm] = useState(false);
-  const [pinData, setPinData] = useState({
-    oldPin: '',
-    newPin: '',
-    confirmPin: ''
-  });
+  // Security States
+  const [showSecurityForm, setShowSecurityForm] = useState(false);
+  const [pins, setPins] = useState({ admin: '', cashier: '' });
+  const [securityTab, setSecurityTab] = useState<'ADMIN' | 'CASHIER'>('CASHIER');
 
-  const [showCashierPinForm, setShowCashierPinForm] = useState(false);
-  const [cashierPinData, setCashierPinData] = useState({
-    newPin: '',
-    confirmPin: ''
-  });
+  // Cup States
+  const [showCupForm, setShowCupForm] = useState(false);
+  const [cupItems, setCupItems] = useState<CupItem[]>([]);
+  const [newCup, setNewCup] = useState({ name: '', stock: '' });
+
+  const [showDangerZone, setShowDangerZone] = useState(false);
 
   useEffect(() => {
-    loadProducts();
-    setApiUrl(getApiUrl());
+    loadInitialAdminData();
   }, []);
 
-  const loadProducts = async () => {
+  const loadInitialAdminData = async () => {
     setIsLoading(true);
-    const data = await fetchProducts();
-    setProducts(data);
+    const [prodData, cups, aPin, cPin] = await Promise.all([
+      fetchProducts(),
+      fetchCupItems(),
+      fetchAdminPin(),
+      fetchCashierPin()
+    ]);
+    setProducts(prodData);
+    setCupItems(cups);
+    setPins({ admin: aPin, cashier: cPin });
+    setApiUrl(getApiUrl());
     setIsLoading(false);
   };
 
   const handleSaveConfig = async () => {
-    if (!apiUrl.trim()) {
-      alert('Masukkan URL Web App terlebih dahulu.');
-      return;
-    }
-
+    if (!apiUrl.trim()) return alert('Masukkan URL Web App!');
     setIsSaving(true);
     try {
       saveApiUrl(apiUrl);
-      // Pemicu refresh data global (Sales & Purchases di App.tsx)
       await onRefreshApp();
-      // Pemicu refresh data lokal (Products di panel ini)
-      await loadProducts();
-      
-      alert('Konfigurasi disimpan & Data otomatis diperbarui!');
+      await loadInitialAdminData();
+      alert('Konfigurasi disimpan!');
       setShowConfigForm(false);
+    } catch (error) { alert('Gagal memperbarui data.'); }
+    finally { setIsSaving(false); }
+  };
+
+  const handleAddCup = async () => {
+    if (!newCup.name.trim() || !newCup.stock) return alert('Nama dan stok wajib diisi!');
+    setIsSaving(true);
+    const updatedCups = [...cupItems, { 
+      id: Date.now().toString(), 
+      name: newCup.name, 
+      stock: parseInt(newCup.stock) 
+    }];
+    const success = await saveSetting('CUP_STOCK', updatedCups);
+    if (success) {
+      setCupItems(updatedCups);
+      setNewCup({ name: '', stock: '' });
+    } else alert('Gagal simpan ke cloud.');
+    setIsSaving(false);
+  };
+
+  const handleDeleteCup = async (id: string) => {
+    if (!confirm('Hapus jenis cup ini?')) return;
+    setIsSaving(true);
+    const updatedCups = cupItems.filter(c => c.id !== id);
+    const success = await saveSetting('CUP_STOCK', updatedCups);
+    if (success) setCupItems(updatedCups);
+    setIsSaving(false);
+  };
+
+  const handleUpdatePin = async () => {
+    const targetKey = securityTab === 'ADMIN' ? 'ADMIN_PIN' : 'CASHIER_PIN';
+    const targetValue = securityTab === 'ADMIN' ? pins.admin : pins.cashier;
+    if (!targetValue || targetValue.length < 4) return alert('PIN minimal 4 digit!');
+    setIsSaving(true);
+    const success = await saveSetting(targetKey, targetValue);
+    if (success) {
+      alert(`PIN ${securityTab} berhasil diperbarui!`);
+      setShowSecurityForm(false);
+    } else alert('Gagal memperbarui PIN ke cloud.');
+    setIsSaving(false);
+  };
+
+  const handleReset = async (type: 'sales' | 'purchases') => {
+    const confirmMsg = type === 'sales' ? 'HAPUS SEMUA DATA PENJUALAN?' : 'HAPUS SEMUA DATA PEMBELIAN?';
+    if (!window.confirm(confirmMsg)) return;
+    if (!window.confirm('Yakin 100%? Tindakan ini akan menghapus data di Google Sheet juga.')) return;
+
+    setIsSaving(true);
+    try {
+      const success = await resetData(type);
+      if (success) {
+        // Delay 2 detik untuk memastikan Google Sheet selesai memproses pembersihan baris
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        await onRefreshApp();
+        alert(`Data ${type === 'sales' ? 'Penjualan' : 'Pembelian'} berhasil di-reset!`);
+      } else {
+        alert('Gagal me-reset data di Cloud. Cek koneksi Anda.');
+      }
     } catch (error) {
       console.error(error);
-      alert('Gagal memperbarui data. Pastikan URL benar.');
+      alert('Terjadi kesalahan sistem saat me-reset.');
     } finally {
       setIsSaving(false);
     }
@@ -88,21 +140,20 @@ function doGet(e) {
         sheet.appendRow(['Key', 'Value']);
         sheet.appendRow(['ADMIN_PIN', '1234']);
         sheet.appendRow(['CASHIER_PIN', '0000']);
+        sheet.appendRow(['CUP_STOCK', '[]']);
      }
      var data = sheet.getDataRange().getValues();
-     var settings = { adminPin: '1234', cashierPin: '0000' };
+     var settings = { adminPin: '1234', cashierPin: '0000', cupStock: '[]' };
      for(var i=0; i<data.length; i++) {
         if(data[i][0] === 'ADMIN_PIN') settings.adminPin = data[i][1];
         if(data[i][0] === 'CASHIER_PIN') settings.cashierPin = data[i][1];
+        if(data[i][0] === 'CUP_STOCK') settings.cupStock = data[i][1];
      }
-     return ContentService.createTextOutput(JSON.stringify({status: 'success', adminPin: settings.adminPin, cashierPin: settings.cashierPin}))
+     return ContentService.createTextOutput(JSON.stringify({status: 'success', adminPin: settings.adminPin, cashierPin: settings.cashierPin, cupStock: settings.cupStock}))
       .setMimeType(ContentService.MimeType.JSON);
   }
 
-  var sheetName = 'Transactions';
-  if (type === 'purchases') sheetName = 'Purchases';
-  if (type === 'products') sheetName = 'Products';
-
+  var sheetName = type === 'purchases' ? 'Purchases' : (type === 'products' ? 'Products' : 'Transactions');
   var sheet = ss.getSheetByName(sheetName);
   if (!sheet) {
     sheet = ss.insertSheet(sheetName);
@@ -112,7 +163,7 @@ function doGet(e) {
   }
 
   var data = sheet.getDataRange().getValues();
-  if (data.length > 0) data.shift();
+  if (data.length > 0) data.shift(); // Remove header
   return ContentService.createTextOutput(JSON.stringify({status: 'success', data: data})).setMimeType(ContentService.MimeType.JSON);
 }
 
@@ -124,32 +175,36 @@ function doPost(e) {
     
     if (action === 'update_setting') {
       var sheet = ss.getSheetByName('Settings');
-      if (!sheet) {
-         sheet = ss.insertSheet('Settings');
-         sheet.appendRow(['Key', 'Value']);
-      }
+      if (!sheet) sheet = ss.insertSheet('Settings');
       var data = sheet.getDataRange().getValues();
       var found = false;
       for(var i=0; i<data.length; i++) {
         if(data[i][0] === payload.key) {
            sheet.getRange(i+1, 2).setValue(payload.value);
-           found = true;
-           break;
+           found = true; break;
         }
       }
       if(!found) sheet.appendRow([payload.key, payload.value]);
       return ContentService.createTextOutput(JSON.stringify({status: 'success'})).setMimeType(ContentService.MimeType.JSON);
     }
 
+    if (action === 'reset_data') {
+      var sheetName = payload.type === 'purchases' ? 'Purchases' : 'Transactions';
+      var sheet = ss.getSheetByName(sheetName);
+      if (sheet) {
+        var lastRow = sheet.getLastRow();
+        if (lastRow > 1) {
+          sheet.deleteRows(2, lastRow - 1);
+        }
+      }
+      return ContentService.createTextOutput(JSON.stringify({status: 'success'})).setMimeType(ContentService.MimeType.JSON);
+    }
+
     if (action === 'update_products') {
       var sheet = ss.getSheetByName('Products');
-      if (!sheet) {
-        sheet = ss.insertSheet('Products');
-        sheet.appendRow(['ID', 'Name', 'Price', 'Category']);
-      } else {
-        sheet.clear(); 
-        sheet.appendRow(['ID', 'Name', 'Price', 'Category']);
-      }
+      if (!sheet) sheet = ss.insertSheet('Products');
+      sheet.clear();
+      sheet.appendRow(['ID', 'Name', 'Price', 'Category']);
       if (payload.data && payload.data.length > 0) sheet.getRange(2, 1, payload.data.length, payload.data[0].length).setValues(payload.data);
       return ContentService.createTextOutput(JSON.stringify({status: 'success'})).setMimeType(ContentService.MimeType.JSON);
     }
@@ -157,9 +212,9 @@ function doPost(e) {
     var sheetName = (action === 'add_purchase') ? 'Purchases' : 'Transactions';
     var sheet = ss.getSheetByName(sheetName);
     if (!sheet) {
-       sheet = ss.insertSheet(sheetName);
-       if(action === 'add_purchase') sheet.appendRow(['ID', 'Date', 'Item Name', 'Supplier', 'Qty', 'Price', 'Total']);
-       else sheet.appendRow(['ID', 'Date', 'Product', 'Category', 'Qty', 'Price', 'Total', 'Payment Method']);
+        sheet = ss.insertSheet(sheetName);
+        if(action === 'add_purchase') sheet.appendRow(['ID', 'Date', 'Item Name', 'Supplier', 'Qty', 'Price', 'Total']);
+        else sheet.appendRow(['ID', 'Date', 'Product', 'Category', 'Qty', 'Price', 'Total', 'Payment Method']);
     }
     if (payload.data) sheet.appendRow(payload.data);
     return ContentService.createTextOutput(JSON.stringify({status: 'success'})).setMimeType(ContentService.MimeType.JSON);
@@ -169,97 +224,13 @@ function doPost(e) {
 }
   `.trim();
 
-  const handleEdit = (product: Product) => {
-    setEditingId(product.id);
-    setFormData(product);
-    setShowProductForm(true); 
-    setShowPinForm(false);
-    setShowConfigForm(false);
-    setShowCashierPinForm(false);
-  };
-
-  const handleCancel = () => {
-    setEditingId(null);
-    setFormData({ id: '', name: '', price: 0, category: 'Teh' });
-    setShowProductForm(false);
-  };
-
-  const handleDelete = async (id: string) => {
-    if (window.confirm('Hapus produk ini?')) {
-      setIsSaving(true);
-      const updatedList = products.filter(p => p.id !== id);
-      setProducts(updatedList);
-      await saveProductList(updatedList);
-      if (editingId === id) handleCancel();
-      setIsSaving(false);
-    }
-  };
-
-  const handleSaveProduct = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!formData.name || formData.price <= 0) return;
-    setIsSaving(true);
-    const newItem = { ...formData, id: editingId || Date.now().toString() };
-    const updatedList = editingId ? products.map(p => p.id === editingId ? newItem : p) : [...products, newItem];
-    setProducts(updatedList);
-    await saveProductList(updatedList);
-    handleCancel();
-    setIsSaving(false);
-  };
-
-  const handleChangePin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsSaving(true);
-    const currentStoredPin = await fetchAdminPin();
-    if (pinData.oldPin !== currentStoredPin) {
-      alert('PIN Lama salah!');
-      setIsSaving(false);
-      return;
-    }
-    if (pinData.newPin.length < 4) {
-      alert('PIN Baru minimal 4 angka');
-      setIsSaving(false);
-      return;
-    }
-    if (pinData.newPin !== pinData.confirmPin) {
-      alert('Konfirmasi PIN tidak cocok!');
-      setIsSaving(false);
-      return;
-    }
-    await saveSetting('ADMIN_PIN', pinData.newPin);
-    alert('PIN Admin berhasil diubah!');
-    setPinData({ oldPin: '', newPin: '', confirmPin: '' });
-    setShowPinForm(false);
-    setIsSaving(false);
-  };
-
-  const handleChangeCashierPin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsSaving(true);
-    if (cashierPinData.newPin.length < 4) {
-      alert('PIN Baru minimal 4 angka');
-      setIsSaving(false);
-      return;
-    }
-    if (cashierPinData.newPin !== cashierPinData.confirmPin) {
-      alert('Konfirmasi PIN tidak cocok!');
-      setIsSaving(false);
-      return;
-    }
-    await saveSetting('CASHIER_PIN', cashierPinData.newPin);
-    alert('PIN Kasir berhasil diperbarui!');
-    setCashierPinData({ newPin: '', confirmPin: '' });
-    setShowCashierPinForm(false);
-    setIsSaving(false);
-  };
-
   return (
     <div className="p-4 pb-24 h-full flex flex-col bg-gray-50 overflow-y-auto no-scrollbar relative">
       {isSaving && (
           <div className="fixed inset-0 bg-black/30 z-50 flex items-center justify-center backdrop-blur-sm">
             <div className="bg-white p-4 rounded-xl shadow-xl flex items-center space-x-3">
                 <Loader2 className="animate-spin text-blue-600" />
-                <span className="font-bold text-gray-700">Memproses...</span>
+                <span className="font-bold text-gray-700">Sedang Sinkronisasi...</span>
             </div>
           </div>
       )}
@@ -267,79 +238,138 @@ function doPost(e) {
       <header className="mb-6 flex justify-between items-center">
         <div>
           <h1 className="text-2xl font-bold text-gray-800">Admin Panel</h1>
-          <p className="text-gray-500 text-sm">Kelola Produk & Keamanan</p>
+          <p className="text-gray-500 text-sm">Kelola Toko & Inventori</p>
         </div>
         <button onClick={onLogout} className="p-2 bg-red-50 text-red-600 rounded-lg"><LogOut size={20} /></button>
       </header>
 
       {/* 1. Google Sheet Connection */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 mb-4 overflow-hidden">
-        <button onClick={() => { setShowConfigForm(!showConfigForm); setShowPinForm(false); setShowCashierPinForm(false); setShowProductForm(false); }} className="w-full p-4 flex justify-between items-center bg-gray-50">
-          <div className="flex items-center text-gray-700 font-bold text-sm"><LinkIcon size={16} className="mr-2 text-green-600"/> Koneksi Google Sheet</div>
+        <button onClick={() => setShowConfigForm(!showConfigForm)} className="w-full p-4 flex justify-between items-center bg-gray-50">
+          <div className="flex items-center text-gray-700 font-bold text-sm"><LinkIcon size={16} className="mr-2 text-green-600"/> Koneksi Cloud</div>
           {showConfigForm ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
         </button>
         {showConfigForm && (
           <div className="p-4 border-t border-gray-100">
              <input type="text" value={apiUrl} onChange={(e) => setApiUrl(e.target.value)} placeholder="Web App URL" className="w-full text-xs p-2 border border-gray-300 rounded-lg mb-3 outline-none"/>
              <div className="flex justify-between items-center">
-                <button onClick={() => setShowTutorial(!showTutorial)} className="text-xs text-blue-600 underline">Tutorial Script</button>
+                <button onClick={() => setShowTutorial(!showTutorial)} className="text-xs text-blue-600 underline">Tutorial Script Baru</button>
                 <button onClick={handleSaveConfig} className="bg-green-600 text-white px-4 py-2 rounded-lg text-xs font-bold">Simpan</button>
              </div>
              {showTutorial && (
               <div className="mt-4 bg-gray-50 p-3 rounded-lg border text-[10px] space-y-2 overflow-x-auto">
-                <p>Ganti kode di Apps Script Anda dengan kode ini (Mendukung Multi-PIN):</p>
+                <p className="font-bold text-red-600 mb-2">Salin ulang kode ini ke Google Apps Script untuk fitur Reset Data yang stabil:</p>
                 <pre className="bg-gray-800 text-gray-100 p-2 rounded">{appScriptCode}</pre>
-                <button onClick={() => navigator.clipboard.writeText(appScriptCode)} className="text-blue-600 font-bold">Salin Kode</button>
+                <button onClick={() => navigator.clipboard.writeText(appScriptCode)} className="text-blue-600 font-bold mt-2">Salin Kode</button>
               </div>
              )}
           </div>
         )}
       </div>
 
-      {/* 2. Admin Security */}
+      {/* 2. Keamanan PIN */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 mb-4 overflow-hidden">
-        <button onClick={() => { setShowPinForm(!showPinForm); setShowConfigForm(false); setShowCashierPinForm(false); setShowProductForm(false); }} className="w-full p-4 flex justify-between items-center bg-gray-50">
-          <div className="flex items-center text-gray-700 font-bold text-sm"><Key size={16} className="mr-2 text-orange-500"/> Keamanan Admin</div>
-          {showPinForm ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+        <button onClick={() => setShowSecurityForm(!showSecurityForm)} className="w-full p-4 flex justify-between items-center bg-gray-50">
+          <div className="flex items-center text-gray-700 font-bold text-sm"><ShieldCheck size={16} className="mr-2 text-purple-600"/> Keamanan & PIN</div>
+          {showSecurityForm ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
         </button>
-        {showPinForm && (
-          <form onSubmit={handleChangePin} className="p-4 space-y-3 animate-fade-in border-t border-gray-100">
-            <input type="password" value={pinData.oldPin} onChange={(e) => setPinData({...pinData, oldPin: e.target.value})} className="w-full border-b py-2 text-sm outline-none" placeholder="PIN Admin Lama" required />
-            <div className="grid grid-cols-2 gap-4">
-              <input type="number" value={pinData.newPin} onChange={(e) => setPinData({...pinData, newPin: e.target.value})} className="w-full border-b py-2 text-sm outline-none" placeholder="PIN Baru" required />
-              <input type="number" value={pinData.confirmPin} onChange={(e) => setPinData({...pinData, confirmPin: e.target.value})} className="w-full border-b py-2 text-sm outline-none" placeholder="Konfirmasi" required />
-            </div>
-            <button type="submit" className="w-full bg-orange-500 text-white py-2 rounded-lg text-xs font-bold">Update PIN Admin</button>
-          </form>
+        {showSecurityForm && (
+          <div className="p-4 border-t border-gray-100 space-y-4">
+             <div className="flex p-1 bg-gray-100 rounded-lg mb-2">
+                <button onClick={() => setSecurityTab('CASHIER')} className={`flex-1 py-1.5 text-[10px] font-bold rounded-md ${securityTab === 'CASHIER' ? 'bg-white text-purple-600 shadow-sm' : 'text-gray-500'}`}>PIN Kasir</button>
+                <button onClick={() => setSecurityTab('ADMIN')} className={`flex-1 py-1.5 text-[10px] font-bold rounded-md ${securityTab === 'ADMIN' ? 'bg-white text-purple-600 shadow-sm' : 'text-gray-500'}`}>PIN Admin</button>
+             </div>
+             <div className="space-y-2">
+                <div className="relative">
+                  <input type="password" inputMode="numeric" value={securityTab === 'ADMIN' ? pins.admin : pins.cashier} onChange={(e) => setPins({...pins, [securityTab.toLowerCase()]: e.target.value})} className="w-full border-b border-gray-200 py-2 pl-8 outline-none text-sm font-bold tracking-widest" placeholder="Minimal 4 Angka"/>
+                  <Lock size={14} className="absolute left-1 top-3 text-gray-300" />
+                </div>
+                <button onClick={handleUpdatePin} className="w-full bg-purple-600 text-white py-2 rounded-lg text-xs font-bold shadow-md shadow-purple-100">Update PIN {securityTab}</button>
+             </div>
+          </div>
         )}
       </div>
 
-      {/* 3. Cashier Security */}
+      {/* 3. Kelola Cup */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 mb-4 overflow-hidden">
-        <button onClick={() => { setShowCashierPinForm(!showCashierPinForm); setShowConfigForm(false); setShowPinForm(false); setShowProductForm(false); }} className="w-full p-4 flex justify-between items-center bg-gray-50">
-          <div className="flex items-center text-gray-700 font-bold text-sm"><User size={16} className="mr-2 text-blue-500"/> Keamanan Kasir</div>
-          {showCashierPinForm ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+        <button onClick={() => setShowCupForm(!showCupForm)} className="w-full p-4 flex justify-between items-center bg-gray-50">
+          <div className="flex items-center text-gray-700 font-bold text-sm"><Coffee size={16} className="mr-2 text-blue-500"/> Stok Cup</div>
+          {showCupForm ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
         </button>
-        {showCashierPinForm && (
-          <form onSubmit={handleChangeCashierPin} className="p-4 space-y-3 animate-fade-in border-t border-gray-100">
-            <div className="bg-blue-50 p-2 rounded text-[10px] text-blue-700 mb-2 font-medium">PIN Kasir digunakan saat masuk aplikasi. Admin bisa mengubahnya langsung di sini (4 angka minimal).</div>
-            <div className="grid grid-cols-2 gap-4">
-              <input type="number" value={cashierPinData.newPin} onChange={(e) => setCashierPinData({...cashierPinData, newPin: e.target.value})} className="w-full border-b py-2 text-sm outline-none" placeholder="PIN Kasir Baru" required />
-              <input type="number" value={cashierPinData.confirmPin} onChange={(e) => setCashierPinData({...cashierPinData, confirmPin: e.target.value})} className="w-full border-b py-2 text-sm outline-none" placeholder="Konfirmasi" required />
-            </div>
-            <button type="submit" className="w-full bg-blue-600 text-white py-2 rounded-lg text-xs font-bold">Simpan PIN Kasir</button>
-          </form>
+        {showCupForm && (
+          <div className="p-4 border-t border-gray-100 space-y-4">
+             <div className="bg-blue-50 p-3 rounded-lg space-y-2 border border-blue-100">
+                <p className="text-[10px] font-bold text-blue-700 uppercase">Tambah Jenis Cup</p>
+                <div className="grid grid-cols-2 gap-2">
+                   <input type="text" placeholder="Nama Cup (16oz)" value={newCup.name} onChange={e => setNewCup({...newCup, name: e.target.value})} className="bg-white border-b border-blue-200 px-2 py-1 text-xs outline-none" />
+                   <input type="number" placeholder="Stok" value={newCup.stock} onChange={e => setNewCup({...newCup, stock: e.target.value})} className="bg-white border-b border-blue-200 px-2 py-1 text-xs outline-none" />
+                </div>
+                <button onClick={handleAddCup} className="w-full bg-blue-600 text-white py-1.5 rounded-lg text-[10px] font-bold flex items-center justify-center"><Plus size={12} className="mr-1"/> Tambah Cup</button>
+             </div>
+
+             <div className="space-y-2">
+                {cupItems.length === 0 ? <p className="text-center text-[10px] text-gray-400 py-2">Belum ada jenis cup.</p> : cupItems.map(cup => (
+                   <div key={cup.id} className="flex justify-between items-center p-2 rounded-lg border border-gray-50 bg-gray-50">
+                      <div>
+                         <div className="text-xs font-bold text-gray-800">{cup.name}</div>
+                         <div className={`text-[10px] font-bold ${cup.stock < 10 ? 'text-red-600' : 'text-blue-600'}`}>Sisa: {cup.stock}</div>
+                      </div>
+                      <button onClick={() => handleDeleteCup(cup.id)} className="text-red-500 p-1 hover:bg-red-50 rounded"><Trash2 size={14}/></button>
+                   </div>
+                ))}
+             </div>
+          </div>
         )}
       </div>
 
-      {/* 4. Product Management */}
+      {/* 4. Zona Bahaya (IMPROVED RESET) */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 mb-4 overflow-hidden">
+        <button onClick={() => setShowDangerZone(!showDangerZone)} className="w-full p-4 flex justify-between items-center bg-red-50 text-red-700">
+          <div className="flex items-center font-bold text-sm"><AlertTriangle size={16} className="mr-2"/> Zona Bahaya</div>
+          {showDangerZone ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+        </button>
+        {showDangerZone && (
+          <div className="p-4 border-t border-red-100 space-y-3">
+             <div className="p-3 bg-red-100/50 rounded-lg mb-2">
+                <p className="text-[10px] text-red-800 leading-tight">
+                  <span className="font-bold">Perhatian:</span> Reset data akan menghapus semua riwayat transaksi secara permanen baik di perangkat ini maupun di Google Sheets.
+                </p>
+             </div>
+             <button 
+                onClick={() => handleReset('sales')} 
+                disabled={isSaving}
+                className="w-full flex items-center justify-center space-x-2 py-3 border border-red-200 text-red-600 rounded-xl text-xs font-bold active:bg-red-50 transition-colors"
+             >
+                <Trash size={14} /> <span>Reset Semua Penjualan</span>
+             </button>
+             <button 
+                onClick={() => handleReset('purchases')} 
+                disabled={isSaving}
+                className="w-full flex items-center justify-center space-x-2 py-3 border border-red-200 text-red-600 rounded-xl text-xs font-bold active:bg-red-50 transition-colors"
+             >
+                <Trash size={14} /> <span>Reset Semua Pembelian</span>
+             </button>
+          </div>
+        )}
+      </div>
+
+      {/* 5. Product Management */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 mb-6 overflow-hidden">
-        <button onClick={() => { setShowProductForm(!showProductForm); setShowConfigForm(false); setShowPinForm(false); setShowCashierPinForm(false); }} className="w-full p-4 flex justify-between items-center bg-gray-50">
-          <div className="flex items-center text-gray-700 font-bold text-sm"><Package size={16} className="mr-2 text-blue-500"/> Kelola Produk</div>
+        <button onClick={() => setShowProductForm(!showProductForm)} className="w-full p-4 flex justify-between items-center bg-gray-50">
+          <div className="flex items-center text-gray-700 font-bold text-sm"><Package size={16} className="mr-2 text-orange-500"/> Kelola Produk</div>
           {showProductForm ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
         </button>
         {showProductForm && (
-          <form onSubmit={handleSaveProduct} className="p-4 bg-white space-y-3 border-t border-gray-100">
+          <form onSubmit={async (e) => {
+            e.preventDefault();
+            setIsSaving(true);
+            const newItem = { ...formData, id: editingId || Date.now().toString() };
+            const updatedList = editingId ? products.map(p => p.id === editingId ? newItem : p) : [...products, newItem];
+            setProducts(updatedList);
+            await saveProductList(updatedList);
+            setEditingId(null); setFormData({ id: '', name: '', price: 0, category: 'Teh' });
+            setShowProductForm(false); setIsSaving(false);
+          }} className="p-4 bg-white space-y-3 border-t border-gray-100">
             <input type="text" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className="w-full border-b py-1 outline-none text-sm" placeholder="Nama Produk" required />
             <div className="grid grid-cols-2 gap-4">
               <select value={formData.category} onChange={e => setFormData({...formData, category: e.target.value})} className="w-full border-b py-1 outline-none text-sm">
@@ -348,28 +378,25 @@ function doPost(e) {
               <input type="number" value={formData.price || ''} onChange={e => setFormData({...formData, price: parseInt(e.target.value) || 0})} className="w-full border-b py-1 outline-none text-sm" placeholder="Harga (Rp)" required />
             </div>
             <div className="flex space-x-2 pt-2">
-              <button type="button" onClick={handleCancel} className="flex-1 py-2 bg-gray-100 text-gray-600 rounded-lg text-sm">Batal</button>
+              <button type="button" onClick={() => setShowProductForm(false)} className="flex-1 py-2 bg-gray-100 text-gray-600 rounded-lg text-sm">Batal</button>
               <button type="submit" className="flex-1 py-2 bg-blue-600 text-white rounded-lg text-sm font-bold">{editingId ? 'Simpan' : 'Tambah'}</button>
             </div>
           </form>
         )}
       </div>
 
-      {/* Product List */}
       <div className="flex-1 bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden flex flex-col min-h-[300px]">
         <div className="p-3 border-b bg-gray-50 flex justify-between items-center text-xs text-gray-500 font-bold uppercase tracking-wider">Daftar Menu ({products.length})</div>
         <div className="overflow-y-auto flex-1 p-2 space-y-2">
-          {isLoading ? <div className="text-center py-10 text-gray-400 text-xs">Memuat...</div> : (
-            products.map(product => (
-              <div key={product.id} className="flex justify-between items-center p-3 rounded-lg border border-gray-100">
-                <div><div className="font-bold text-gray-800 text-sm">{product.name}</div><div className="text-[10px] text-gray-500">{product.category} • Rp {product.price.toLocaleString('id-ID')}</div></div>
-                <div className="flex space-x-2">
-                  <button onClick={() => handleEdit(product)} className="p-2 text-blue-600 bg-blue-50 rounded-lg"><Edit2 size={16} /></button>
-                  <button onClick={() => handleDelete(product.id)} className="p-2 text-red-600 bg-red-50 rounded-lg"><Trash2 size={16} /></button>
-                </div>
+          {products.map(product => (
+            <div key={product.id} className="flex justify-between items-center p-3 rounded-lg border border-gray-100">
+              <div><div className="font-bold text-gray-800 text-sm">{product.name}</div><div className="text-[10px] text-gray-500">{product.category} • Rp {product.price.toLocaleString('id-ID')}</div></div>
+              <div className="flex space-x-2">
+                <button onClick={() => { setEditingId(product.id); setFormData(product); setShowProductForm(true); }} className="p-2 text-blue-600 bg-blue-50 rounded-lg"><Edit2 size={16} /></button>
+                <button onClick={async () => { if (confirm('Hapus produk?')) { const updated = products.filter(p => p.id !== product.id); setProducts(updated); await saveProductList(updated); } }} className="p-2 text-red-600 bg-red-50 rounded-lg"><Trash2 size={16} /></button>
               </div>
-            ))
-          )}
+            </div>
+          ))}
         </div>
       </div>
     </div>

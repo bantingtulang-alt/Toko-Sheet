@@ -1,3 +1,4 @@
+
 export interface Transaction {
   id: string;
   date: string;
@@ -7,6 +8,7 @@ export interface Transaction {
   price: number;
   total: number;
   paymentMethod: 'Cash' | 'QRIS' | 'Transfer';
+  cupId?: string; // Menyimpan ID cup yang digunakan
 }
 
 export interface Purchase {
@@ -24,6 +26,12 @@ export interface Product {
   name: string;
   price: number;
   category: string;
+}
+
+export interface CupItem {
+  id: string;
+  name: string;
+  stock: number;
 }
 
 export enum UserRole {
