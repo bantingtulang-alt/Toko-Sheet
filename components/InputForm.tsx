@@ -2,7 +2,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Transaction, Product, CupItem } from '../types';
 import { fetchProducts } from '../services/productService';
-import { fetchCupItems, saveSetting } from '../services/storageService';
+import { fetchCupItems, saveCupList } from '../services/storageService';
 import { Save, Loader2, Minus, Plus, Coffee, CupSoda, Trash2, ShoppingCart, Utensils, Package, Search, Wallet, QrCode, Smartphone, X, Check } from 'lucide-react';
 
 interface InputFormProps {
@@ -81,7 +81,7 @@ const InputForm: React.FC<InputFormProps> = ({ onSave }) => {
   const handleOpenCupModal = () => {
     if (cart.length === 0) return;
     if (cupItems.length === 0) {
-      alert("Belum ada jenis cup yang ditambahkan di Admin Panel. Silakan hubungi Admin.");
+      alert("Belum ada jenis cup yang ditambahkan di Admin Panel.");
       return;
     }
     setShowCupModal(true);
@@ -114,11 +114,11 @@ const InputForm: React.FC<InputFormProps> = ({ onSave }) => {
         await onSave(newTransaction);
       }
       
-      // Update Stok Cup Spesifik
+      // Update Stok Cup di Database Sheet
       const updatedCups = cupItems.map(c => 
         c.id === selectedCupId ? { ...c, stock: c.stock - totalItemsInCart } : c
       );
-      await saveSetting('CUP_STOCK', updatedCups);
+      await saveCupList(updatedCups);
       setCupItems(updatedCups);
 
       setCart([]);

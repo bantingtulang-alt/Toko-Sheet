@@ -1,3 +1,4 @@
+
 import { Transaction, Purchase, CupItem } from '../types';
 
 const STORAGE_KEY = 'tokosheet_data';
@@ -15,24 +16,14 @@ export const saveApiUrl = (url: string) => {
   localStorage.setItem(API_URL_KEY, url);
 };
 
-// --- SETTINGS MANAGEMENT (PIN & CUP STOCK) ---
+// --- SETTINGS MANAGEMENT (PIN ONLY) ---
 
 export const fetchSettings = async () => {
   const apiUrl = getApiUrl();
   const defaultSettings = {
     adminPin: localStorage.getItem(ADMIN_PIN_KEY) || '1234',
-    cashierPin: localStorage.getItem(CASHIER_PIN_KEY) || '0000',
-    cupStock: [] as CupItem[]
+    cashierPin: localStorage.getItem(CASHIER_PIN_KEY) || '0000'
   };
-
-  const localCup = localStorage.getItem(CUP_STOCK_KEY);
-  if (localCup) {
-    try {
-      defaultSettings.cupStock = JSON.parse(localCup);
-    } catch (e) {
-      defaultSettings.cupStock = [];
-    }
-  }
 
   if (apiUrl) {
     try {
@@ -45,20 +36,10 @@ export const fetchSettings = async () => {
           const aPin = String(json.adminPin || defaultSettings.adminPin);
           const cPin = String(json.cashierPin || defaultSettings.cashierPin);
           
-          let cStock: CupItem[] = [];
-          if (json.cupStock) {
-            try {
-              cStock = typeof json.cupStock === 'string' ? JSON.parse(json.cupStock) : json.cupStock;
-            } catch (e) {
-              console.error("Gagal parse cupStock dari cloud", e);
-            }
-          }
-          
           localStorage.setItem(ADMIN_PIN_KEY, aPin);
           localStorage.setItem(CASHIER_PIN_KEY, cPin);
-          localStorage.setItem(CUP_STOCK_KEY, JSON.stringify(cStock));
           
-          return { adminPin: aPin, cashierPin: cPin, cupStock: cStock };
+          return { adminPin: aPin, cashierPin: cPin };
         }
       }
     } catch (error) {
@@ -79,15 +60,9 @@ export const fetchCashierPin = async (): Promise<string> => {
   return settings.cashierPin;
 };
 
-export const fetchCupItems = async (): Promise<CupItem[]> => {
-  const settings = await fetchSettings();
-  return settings.cupStock;
-};
-
-export const saveSetting = async (key: 'ADMIN_PIN' | 'CASHIER_PIN' | 'CUP_STOCK', value: any): Promise<boolean> => {
-  const localKey = key === 'ADMIN_PIN' ? ADMIN_PIN_KEY : (key === 'CASHIER_PIN' ? CASHIER_PIN_KEY : CUP_STOCK_KEY);
-  const stringValue = typeof value === 'string' ? value : JSON.stringify(value);
-  localStorage.setItem(localKey, stringValue);
+export const saveSetting = async (key: 'ADMIN_PIN' | 'CASHIER_PIN', value: string): Promise<boolean> => {
+  const localKey = key === 'ADMIN_PIN' ? ADMIN_PIN_KEY : CASHIER_PIN_KEY;
+  localStorage.setItem(localKey, value);
   
   const apiUrl = getApiUrl();
   if (apiUrl) {
@@ -95,7 +70,7 @@ export const saveSetting = async (key: 'ADMIN_PIN' | 'CASHIER_PIN' | 'CUP_STOCK'
       const payload = {
         action: 'update_setting',
         key: key,
-        value: stringValue
+        value: value
       };
 
       await fetch(apiUrl, {
@@ -112,37 +87,78 @@ export const saveSetting = async (key: 'ADMIN_PIN' | 'CASHIER_PIN' | 'CUP_STOCK'
   return true;
 };
 
-// --- DATA RESET (IMPROVED FOR GOOGLE SHEETS) ---
+// --- CUP STOCK MANAGEMENT (INDEPENDENT SHEET) ---
+
+export const fetchCupItems = async (): Promise<CupItem[]> => {
+  const apiUrl = getApiUrl();
+  
+  if (apiUrl) {
+    try {
+      const separator = apiUrl.includes('?') ? '&' : '?';
+      const response = await fetch(`${apiUrl}${separator}type=cups&t=${Date.now()}`);
+      const json = await response.json();
+      if (json.status === 'success' && Array.isArray(json.data)) {
+        const cups = json.data.map((row: any) => ({
+          id: String(row[0]),
+          name: String(row[1]),
+          stock: Number(row[2]) || 0
+        }));
+        localStorage.setItem(CUP_STOCK_KEY, JSON.stringify(cups));
+        return cups;
+      }
+    } catch (error) {
+      console.error("Gagal fetch cups dari cloud:", error);
+    }
+  }
+
+  const local = localStorage.getItem(CUP_STOCK_KEY);
+  return local ? JSON.parse(local) : [];
+};
+
+export const saveCupList = async (cups: CupItem[]): Promise<boolean> => {
+  localStorage.setItem(CUP_STOCK_KEY, JSON.stringify(cups));
+  
+  const apiUrl = getApiUrl();
+  if (apiUrl) {
+    try {
+      const payload = {
+        action: 'update_cups',
+        data: cups.map(c => [c.id, c.name, c.stock])
+      };
+
+      await fetch(apiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify(payload)
+      });
+      return true;
+    } catch (error) {
+      console.error("Gagal sinkron cups ke cloud:", error);
+      return false;
+    }
+  }
+  return true;
+};
+
+// --- DATA RESET (STABLE) ---
 
 export const resetData = async (type: 'sales' | 'purchases'): Promise<boolean> => {
   const apiUrl = getApiUrl();
-  
-  // 1. Reset Lokal Dulu
   const key = type === 'sales' ? STORAGE_KEY : PURCHASE_KEY;
   localStorage.setItem(key, JSON.stringify([]));
 
-  // 2. Reset Cloud
   if (apiUrl) {
     try {
       const response = await fetch(apiUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify({ 
-          action: 'reset_data', 
-          type: type 
-        })
+        body: JSON.stringify({ action: 'reset_data', type: type })
       });
       
       const result = await response.json();
-      if (result.status === 'success') {
-        console.log(`Cloud Reset Success: ${type}`);
-        return true;
-      } else {
-        console.error(`Cloud Reset Failed: ${result.message}`);
-        return false;
-      }
+      return result.status === 'success';
     } catch (error) {
-      console.error(`Gagal menghubungi server Apps Script untuk reset ${type}:`, error);
+      console.error(`Error Reset Cloud:`, error);
       return false;
     }
   }

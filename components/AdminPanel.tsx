@@ -1,7 +1,8 @@
+
 import React, { useState, useEffect } from 'react';
 import { Product, UserRole, CupItem } from '../types';
 import { fetchProducts, saveProductList } from '../services/productService';
-import { getApiUrl, saveApiUrl, fetchAdminPin, fetchCashierPin, fetchCupItems, saveSetting, resetData } from '../services/storageService';
+import { getApiUrl, saveApiUrl, fetchAdminPin, fetchCashierPin, fetchCupItems, saveCupList, saveSetting, resetData } from '../services/storageService';
 import { Plus, Trash2, Edit2, LogOut, RefreshCw, Loader2, Key, Lock, ChevronDown, ChevronUp, Package, Link as LinkIcon, Coffee, Trash, AlertTriangle, ShieldCheck, User, X } from 'lucide-react';
 
 interface AdminPanelProps {
@@ -74,7 +75,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout, onRefreshApp }) => {
       name: newCup.name, 
       stock: parseInt(newCup.stock) 
     }];
-    const success = await saveSetting('CUP_STOCK', updatedCups);
+    const success = await saveCupList(updatedCups);
     if (success) {
       setCupItems(updatedCups);
       setNewCup({ name: '', stock: '' });
@@ -86,7 +87,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout, onRefreshApp }) => {
     if (!confirm('Hapus jenis cup ini?')) return;
     setIsSaving(true);
     const updatedCups = cupItems.filter(c => c.id !== id);
-    const success = await saveSetting('CUP_STOCK', updatedCups);
+    const success = await saveCupList(updatedCups);
     if (success) setCupItems(updatedCups);
     setIsSaving(false);
   };
@@ -96,7 +97,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout, onRefreshApp }) => {
     const targetValue = securityTab === 'ADMIN' ? pins.admin : pins.cashier;
     if (!targetValue || targetValue.length < 4) return alert('PIN minimal 4 digit!');
     setIsSaving(true);
-    const success = await saveSetting(targetKey, targetValue);
+    const success = await saveSetting(targetKey as any, targetValue);
     if (success) {
       alert(`PIN ${securityTab} berhasil diperbarui!`);
       setShowSecurityForm(false);
@@ -107,18 +108,17 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout, onRefreshApp }) => {
   const handleReset = async (type: 'sales' | 'purchases') => {
     const confirmMsg = type === 'sales' ? 'HAPUS SEMUA DATA PENJUALAN?' : 'HAPUS SEMUA DATA PEMBELIAN?';
     if (!window.confirm(confirmMsg)) return;
-    if (!window.confirm('Yakin 100%? Tindakan ini akan menghapus data di Google Sheet juga.')) return;
+    if (!window.confirm('PERINGATAN AKHIR: Data di Google Sheet akan dikosongkan secara permanen. Lanjutkan?')) return;
 
     setIsSaving(true);
     try {
       const success = await resetData(type);
       if (success) {
-        // Beri waktu 2.5 detik untuk Google Sheet mengolah database
-        await new Promise(resolve => setTimeout(resolve, 2500));
+        await new Promise(resolve => setTimeout(resolve, 3000));
         await onRefreshApp();
-        alert(`Data ${type === 'sales' ? 'Penjualan' : 'Pembelian'} berhasil di-reset secara permanen!`);
+        alert(`Data ${type === 'sales' ? 'Penjualan' : 'Pembelian'} berhasil dibersihkan!`);
       } else {
-        alert('Cloud gagal mereset. Pastikan Script Google Anda sudah menggunakan kode terbaru dari Tutorial.');
+        alert('Gagal me-reset Cloud.');
       }
     } catch (error) {
       console.error(error);
@@ -140,25 +140,24 @@ function doGet(e) {
         sheet.appendRow(['Key', 'Value']);
         sheet.appendRow(['ADMIN_PIN', '1234']);
         sheet.appendRow(['CASHIER_PIN', '0000']);
-        sheet.appendRow(['CUP_STOCK', '[]']);
      }
      var data = sheet.getDataRange().getValues();
-     var settings = { adminPin: '1234', cashierPin: '0000', cupStock: '[]' };
+     var settings = { adminPin: '1234', cashierPin: '0000' };
      for(var i=0; i<data.length; i++) {
         if(data[i][0] === 'ADMIN_PIN') settings.adminPin = data[i][1];
         if(data[i][0] === 'CASHIER_PIN') settings.cashierPin = data[i][1];
-        if(data[i][0] === 'CUP_STOCK') settings.cupStock = data[i][1];
      }
-     return ContentService.createTextOutput(JSON.stringify({status: 'success', adminPin: settings.adminPin, cashierPin: settings.cashierPin, cupStock: settings.cupStock}))
+     return ContentService.createTextOutput(JSON.stringify({status: 'success', adminPin: settings.adminPin, cashierPin: settings.cashierPin}))
       .setMimeType(ContentService.MimeType.JSON);
   }
 
-  var sheetName = type === 'purchases' ? 'Purchases' : (type === 'products' ? 'Products' : 'Transactions');
+  var sheetName = type === 'purchases' ? 'Purchases' : (type === 'products' ? 'Products' : (type === 'cups' ? 'Cups' : 'Transactions'));
   var sheet = ss.getSheetByName(sheetName);
   if (!sheet) {
     sheet = ss.insertSheet(sheetName);
     if(type === 'purchases') sheet.appendRow(['ID', 'Date', 'Item Name', 'Supplier', 'Qty', 'Price', 'Total']);
     else if (type === 'products') sheet.appendRow(['ID', 'Name', 'Price', 'Category']);
+    else if (type === 'cups') sheet.appendRow(['ID', 'Name', 'Stock']);
     else sheet.appendRow(['ID', 'Date', 'Product', 'Category', 'Qty', 'Price', 'Total', 'Payment Method']);
   }
 
@@ -173,7 +172,7 @@ function doPost(e) {
     var payload = JSON.parse(e.postData.contents);
     var action = payload.action; 
     
-    // ACTION: UPDATE SETTING
+    // UPDATE SETTING
     if (action === 'update_setting') {
       var sheet = ss.getSheetByName('Settings');
       if (!sheet) sheet = ss.insertSheet('Settings');
@@ -189,7 +188,17 @@ function doPost(e) {
       return ContentService.createTextOutput(JSON.stringify({status: 'success'})).setMimeType(ContentService.MimeType.JSON);
     }
 
-    // ACTION: RESET DATA (STABLE VERSION)
+    // UPDATE CUPS (SHEET MANDIRI)
+    if (action === 'update_cups') {
+      var sheet = ss.getSheetByName('Cups');
+      if (!sheet) sheet = ss.insertSheet('Cups');
+      sheet.clear();
+      sheet.appendRow(['ID', 'Name', 'Stock']);
+      if (payload.data && payload.data.length > 0) sheet.getRange(2, 1, payload.data.length, payload.data[0].length).setValues(payload.data);
+      return ContentService.createTextOutput(JSON.stringify({status: 'success'})).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    // RESET DATA
     if (action === 'reset_data') {
       var sheetName = (payload.type === 'purchases') ? 'Purchases' : 'Transactions';
       var sheet = ss.getSheetByName(sheetName);
@@ -197,17 +206,13 @@ function doPost(e) {
         var lr = sheet.getLastRow();
         if (lr > 1) {
           sheet.deleteRows(2, lr - 1);
+          SpreadsheetApp.flush();
         }
-      } else {
-        // Jika sheet tidak ada, buat baru
-        sheet = ss.insertSheet(sheetName);
-        if(payload.type === 'purchases') sheet.appendRow(['ID', 'Date', 'Item Name', 'Supplier', 'Qty', 'Price', 'Total']);
-        else sheet.appendRow(['ID', 'Date', 'Product', 'Category', 'Qty', 'Price', 'Total', 'Payment Method']);
       }
-      return ContentService.createTextOutput(JSON.stringify({status: 'success', message: 'Sheet ' + sheetName + ' cleared'})).setMimeType(ContentService.MimeType.JSON);
+      return ContentService.createTextOutput(JSON.stringify({status: 'success'})).setMimeType(ContentService.MimeType.JSON);
     }
 
-    // ACTION: UPDATE PRODUCTS
+    // UPDATE PRODUCTS
     if (action === 'update_products') {
       var sheet = ss.getSheetByName('Products');
       if (!sheet) sheet = ss.insertSheet('Products');
@@ -217,7 +222,7 @@ function doPost(e) {
       return ContentService.createTextOutput(JSON.stringify({status: 'success'})).setMimeType(ContentService.MimeType.JSON);
     }
 
-    // ACTION: ADD RECORD (SALE / PURCHASE)
+    // ADD RECORD
     var sheetName = (action === 'add_purchase') ? 'Purchases' : 'Transactions';
     var sheet = ss.getSheetByName(sheetName);
     if (!sheet) {
@@ -267,12 +272,12 @@ function doPost(e) {
              </div>
              {showTutorial && (
               <div className="mt-4 bg-gray-50 p-3 rounded-lg border text-[10px] space-y-2 overflow-x-auto">
-                <p className="font-bold text-red-600 mb-2">PENTING: Gunakan kode di bawah ini untuk memperbaiki Reset Data yang macet!</p>
+                <p className="font-bold text-red-600 mb-2 underline">WAJIB: Timpa kode lama di Apps Script untuk mendukung Sheet 'Cups' terpisah:</p>
                 <pre className="bg-gray-800 text-gray-100 p-2 rounded">{appScriptCode}</pre>
                 <button onClick={() => {
                   navigator.clipboard.writeText(appScriptCode);
-                  alert('Kode berhasil disalin! Ganti kode lama di Google Apps Script dengan ini.');
-                }} className="text-blue-600 font-bold mt-2">Salin & Timpa Kode Lama</button>
+                  alert('Kode baru berhasil disalin!');
+                }} className="text-blue-600 font-bold mt-2">Salin Kode</button>
               </div>
              )}
           </div>
@@ -302,10 +307,10 @@ function doPost(e) {
         )}
       </div>
 
-      {/* 3. Kelola Cup */}
+      {/* 3. Kelola Cup (Database Sheet) */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 mb-4 overflow-hidden">
         <button onClick={() => setShowCupForm(!showCupForm)} className="w-full p-4 flex justify-between items-center bg-gray-50">
-          <div className="flex items-center text-gray-700 font-bold text-sm"><Coffee size={16} className="mr-2 text-blue-500"/> Stok Cup</div>
+          <div className="flex items-center text-gray-700 font-bold text-sm"><Coffee size={16} className="mr-2 text-blue-500"/> Stok Cup (Database)</div>
           {showCupForm ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
         </button>
         {showCupForm && (
@@ -313,7 +318,7 @@ function doPost(e) {
              <div className="bg-blue-50 p-3 rounded-lg space-y-2 border border-blue-100">
                 <p className="text-[10px] font-bold text-blue-700 uppercase">Tambah Jenis Cup</p>
                 <div className="grid grid-cols-2 gap-2">
-                   <input type="text" placeholder="Nama Cup (16oz)" value={newCup.name} onChange={e => setNewCup({...newCup, name: e.target.value})} className="bg-white border-b border-blue-200 px-2 py-1 text-xs outline-none" />
+                   <input type="text" placeholder="Nama Cup" value={newCup.name} onChange={e => setNewCup({...newCup, name: e.target.value})} className="bg-white border-b border-blue-200 px-2 py-1 text-xs outline-none" />
                    <input type="number" placeholder="Stok" value={newCup.stock} onChange={e => setNewCup({...newCup, stock: e.target.value})} className="bg-white border-b border-blue-200 px-2 py-1 text-xs outline-none" />
                 </div>
                 <button onClick={handleAddCup} className="w-full bg-blue-600 text-white py-1.5 rounded-lg text-[10px] font-bold flex items-center justify-center"><Plus size={12} className="mr-1"/> Tambah Cup</button>
@@ -334,7 +339,7 @@ function doPost(e) {
         )}
       </div>
 
-      {/* 4. Zona Bahaya (PERMANENT RESET) */}
+      {/* 4. Zona Bahaya */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 mb-4 overflow-hidden">
         <button onClick={() => setShowDangerZone(!showDangerZone)} className="w-full p-4 flex justify-between items-center bg-red-50 text-red-700">
           <div className="flex items-center font-bold text-sm"><AlertTriangle size={16} className="mr-2"/> Zona Bahaya</div>
@@ -342,24 +347,19 @@ function doPost(e) {
         </button>
         {showDangerZone && (
           <div className="p-4 border-t border-red-100 space-y-3">
-             <div className="p-3 bg-red-100/50 rounded-lg mb-2">
-                <p className="text-[10px] text-red-800 leading-tight">
-                  <span className="font-bold">PERHATIAN:</span> Tombol ini akan menghapus semua data di perangkat ini DAN di Google Sheet. Pastikan Anda sudah menggunakan Script terbaru.
-                </p>
-             </div>
              <button 
                 onClick={() => handleReset('sales')} 
                 disabled={isSaving}
                 className="w-full flex items-center justify-center space-x-2 py-3 border border-red-200 text-red-600 rounded-xl text-xs font-bold active:bg-red-50 transition-colors"
              >
-                <Trash size={14} /> <span>Reset Database Penjualan</span>
+                <Trash size={14} /> <span>Kosongkan Lembar Penjualan</span>
              </button>
              <button 
                 onClick={() => handleReset('purchases')} 
                 disabled={isSaving}
                 className="w-full flex items-center justify-center space-x-2 py-3 border border-red-200 text-red-600 rounded-xl text-xs font-bold active:bg-red-50 transition-colors"
              >
-                <Trash size={14} /> <span>Reset Database Pembelian</span>
+                <Trash size={14} /> <span>Kosongkan Lembar Pembelian</span>
              </button>
           </div>
         )}
