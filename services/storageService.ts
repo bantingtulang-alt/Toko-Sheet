@@ -112,27 +112,37 @@ export const saveSetting = async (key: 'ADMIN_PIN' | 'CASHIER_PIN' | 'CUP_STOCK'
   return true;
 };
 
-// --- DATA RESET (IMPROVED) ---
+// --- DATA RESET (IMPROVED FOR GOOGLE SHEETS) ---
 
 export const resetData = async (type: 'sales' | 'purchases'): Promise<boolean> => {
   const apiUrl = getApiUrl();
   
-  // Clear LocalStorage dulu agar UI segera update jika offline
+  // 1. Reset Lokal Dulu
   const key = type === 'sales' ? STORAGE_KEY : PURCHASE_KEY;
   localStorage.setItem(key, JSON.stringify([]));
 
+  // 2. Reset Cloud
   if (apiUrl) {
     try {
       const response = await fetch(apiUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify({ action: 'reset_data', type: type })
+        body: JSON.stringify({ 
+          action: 'reset_data', 
+          type: type 
+        })
       });
       
       const result = await response.json();
-      return result.status === 'success';
+      if (result.status === 'success') {
+        console.log(`Cloud Reset Success: ${type}`);
+        return true;
+      } else {
+        console.error(`Cloud Reset Failed: ${result.message}`);
+        return false;
+      }
     } catch (error) {
-      console.error(`Gagal reset ${type} di cloud:`, error);
+      console.error(`Gagal menghubungi server Apps Script untuk reset ${type}:`, error);
       return false;
     }
   }

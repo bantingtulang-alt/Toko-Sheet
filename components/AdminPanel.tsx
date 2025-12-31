@@ -113,16 +113,16 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout, onRefreshApp }) => {
     try {
       const success = await resetData(type);
       if (success) {
-        // Delay 2 detik untuk memastikan Google Sheet selesai memproses pembersihan baris
-        await new Promise(resolve => setTimeout(resolve, 2000));
+        // Beri waktu 2.5 detik untuk Google Sheet mengolah database
+        await new Promise(resolve => setTimeout(resolve, 2500));
         await onRefreshApp();
-        alert(`Data ${type === 'sales' ? 'Penjualan' : 'Pembelian'} berhasil di-reset!`);
+        alert(`Data ${type === 'sales' ? 'Penjualan' : 'Pembelian'} berhasil di-reset secara permanen!`);
       } else {
-        alert('Gagal me-reset data di Cloud. Cek koneksi Anda.');
+        alert('Cloud gagal mereset. Pastikan Script Google Anda sudah menggunakan kode terbaru dari Tutorial.');
       }
     } catch (error) {
       console.error(error);
-      alert('Terjadi kesalahan sistem saat me-reset.');
+      alert('Terjadi kesalahan sinkronisasi.');
     } finally {
       setIsSaving(false);
     }
@@ -173,6 +173,7 @@ function doPost(e) {
     var payload = JSON.parse(e.postData.contents);
     var action = payload.action; 
     
+    // ACTION: UPDATE SETTING
     if (action === 'update_setting') {
       var sheet = ss.getSheetByName('Settings');
       if (!sheet) sheet = ss.insertSheet('Settings');
@@ -188,18 +189,25 @@ function doPost(e) {
       return ContentService.createTextOutput(JSON.stringify({status: 'success'})).setMimeType(ContentService.MimeType.JSON);
     }
 
+    // ACTION: RESET DATA (STABLE VERSION)
     if (action === 'reset_data') {
-      var sheetName = payload.type === 'purchases' ? 'Purchases' : 'Transactions';
+      var sheetName = (payload.type === 'purchases') ? 'Purchases' : 'Transactions';
       var sheet = ss.getSheetByName(sheetName);
       if (sheet) {
-        var lastRow = sheet.getLastRow();
-        if (lastRow > 1) {
-          sheet.deleteRows(2, lastRow - 1);
+        var lr = sheet.getLastRow();
+        if (lr > 1) {
+          sheet.deleteRows(2, lr - 1);
         }
+      } else {
+        // Jika sheet tidak ada, buat baru
+        sheet = ss.insertSheet(sheetName);
+        if(payload.type === 'purchases') sheet.appendRow(['ID', 'Date', 'Item Name', 'Supplier', 'Qty', 'Price', 'Total']);
+        else sheet.appendRow(['ID', 'Date', 'Product', 'Category', 'Qty', 'Price', 'Total', 'Payment Method']);
       }
-      return ContentService.createTextOutput(JSON.stringify({status: 'success'})).setMimeType(ContentService.MimeType.JSON);
+      return ContentService.createTextOutput(JSON.stringify({status: 'success', message: 'Sheet ' + sheetName + ' cleared'})).setMimeType(ContentService.MimeType.JSON);
     }
 
+    // ACTION: UPDATE PRODUCTS
     if (action === 'update_products') {
       var sheet = ss.getSheetByName('Products');
       if (!sheet) sheet = ss.insertSheet('Products');
@@ -209,6 +217,7 @@ function doPost(e) {
       return ContentService.createTextOutput(JSON.stringify({status: 'success'})).setMimeType(ContentService.MimeType.JSON);
     }
 
+    // ACTION: ADD RECORD (SALE / PURCHASE)
     var sheetName = (action === 'add_purchase') ? 'Purchases' : 'Transactions';
     var sheet = ss.getSheetByName(sheetName);
     if (!sheet) {
@@ -230,7 +239,7 @@ function doPost(e) {
           <div className="fixed inset-0 bg-black/30 z-50 flex items-center justify-center backdrop-blur-sm">
             <div className="bg-white p-4 rounded-xl shadow-xl flex items-center space-x-3">
                 <Loader2 className="animate-spin text-blue-600" />
-                <span className="font-bold text-gray-700">Sedang Sinkronisasi...</span>
+                <span className="font-bold text-gray-700">Sinkronisasi Cloud...</span>
             </div>
           </div>
       )}
@@ -258,9 +267,12 @@ function doPost(e) {
              </div>
              {showTutorial && (
               <div className="mt-4 bg-gray-50 p-3 rounded-lg border text-[10px] space-y-2 overflow-x-auto">
-                <p className="font-bold text-red-600 mb-2">Salin ulang kode ini ke Google Apps Script untuk fitur Reset Data yang stabil:</p>
+                <p className="font-bold text-red-600 mb-2">PENTING: Gunakan kode di bawah ini untuk memperbaiki Reset Data yang macet!</p>
                 <pre className="bg-gray-800 text-gray-100 p-2 rounded">{appScriptCode}</pre>
-                <button onClick={() => navigator.clipboard.writeText(appScriptCode)} className="text-blue-600 font-bold mt-2">Salin Kode</button>
+                <button onClick={() => {
+                  navigator.clipboard.writeText(appScriptCode);
+                  alert('Kode berhasil disalin! Ganti kode lama di Google Apps Script dengan ini.');
+                }} className="text-blue-600 font-bold mt-2">Salin & Timpa Kode Lama</button>
               </div>
              )}
           </div>
@@ -322,7 +334,7 @@ function doPost(e) {
         )}
       </div>
 
-      {/* 4. Zona Bahaya (IMPROVED RESET) */}
+      {/* 4. Zona Bahaya (PERMANENT RESET) */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 mb-4 overflow-hidden">
         <button onClick={() => setShowDangerZone(!showDangerZone)} className="w-full p-4 flex justify-between items-center bg-red-50 text-red-700">
           <div className="flex items-center font-bold text-sm"><AlertTriangle size={16} className="mr-2"/> Zona Bahaya</div>
@@ -332,7 +344,7 @@ function doPost(e) {
           <div className="p-4 border-t border-red-100 space-y-3">
              <div className="p-3 bg-red-100/50 rounded-lg mb-2">
                 <p className="text-[10px] text-red-800 leading-tight">
-                  <span className="font-bold">Perhatian:</span> Reset data akan menghapus semua riwayat transaksi secara permanen baik di perangkat ini maupun di Google Sheets.
+                  <span className="font-bold">PERHATIAN:</span> Tombol ini akan menghapus semua data di perangkat ini DAN di Google Sheet. Pastikan Anda sudah menggunakan Script terbaru.
                 </p>
              </div>
              <button 
@@ -340,14 +352,14 @@ function doPost(e) {
                 disabled={isSaving}
                 className="w-full flex items-center justify-center space-x-2 py-3 border border-red-200 text-red-600 rounded-xl text-xs font-bold active:bg-red-50 transition-colors"
              >
-                <Trash size={14} /> <span>Reset Semua Penjualan</span>
+                <Trash size={14} /> <span>Reset Database Penjualan</span>
              </button>
              <button 
                 onClick={() => handleReset('purchases')} 
                 disabled={isSaving}
                 className="w-full flex items-center justify-center space-x-2 py-3 border border-red-200 text-red-600 rounded-xl text-xs font-bold active:bg-red-50 transition-colors"
              >
-                <Trash size={14} /> <span>Reset Semua Pembelian</span>
+                <Trash size={14} /> <span>Reset Database Pembelian</span>
              </button>
           </div>
         )}
