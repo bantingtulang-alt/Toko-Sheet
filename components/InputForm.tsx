@@ -159,14 +159,58 @@ const InputForm: React.FC<InputFormProps> = ({ onSave }) => {
             {filteredItems.map((item) => {
               const qtyInCart = cart.find(c => c.productName === item.name)?.quantity || 0;
               return (
-                <button key={item.id} onClick={() => addToCart(item)} className={`p-2 rounded-xl border transition-all flex flex-col items-center justify-between relative h-28 ${qtyInCart > 0 ? 'bg-blue-50 border-blue-500' : 'bg-white border-gray-200'}`}>
-                  {qtyInCart > 0 && <div className="absolute top-1 right-1 bg-blue-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">{qtyInCart}</div>}
-                  <div className={`mt-1 p-2 rounded-full ${qtyInCart > 0 ? 'bg-blue-100 text-blue-600' : 'bg-gray-50 text-gray-400'}`}><Coffee size={20}/></div>
-                  <div className="w-full text-center">
-                    <div className="font-semibold text-[11px] text-gray-800 leading-tight line-clamp-2">{item.name}</div>
-                    <div className="text-[10px] font-bold text-blue-600">Rp {item.price.toLocaleString('id-ID')}</div>
+                <div 
+                  key={item.id} 
+                  className={`p-2 rounded-xl border transition-all flex flex-col items-center justify-between relative h-36 ${
+                    qtyInCart > 0 ? 'bg-blue-50 border-blue-500 shadow-sm' : 'bg-white border-gray-200'
+                  }`}
+                >
+                  {/* Top Area: Clickable for adding first item */}
+                  <div 
+                    className="w-full flex-1 flex flex-col items-center justify-center cursor-pointer"
+                    onClick={() => addToCart(item)}
+                  >
+                    <div className={`p-2 rounded-full mb-1 ${qtyInCart > 0 ? 'bg-blue-100 text-blue-600' : 'bg-gray-50 text-gray-400'}`}>
+                      <Coffee size={18}/>
+                    </div>
+                    <div className="w-full text-center px-0.5">
+                      <div className="font-semibold text-[10px] text-gray-800 leading-tight line-clamp-2 min-h-[24px]">
+                        {item.name}
+                      </div>
+                      <div className="text-[10px] font-bold text-blue-600 mt-0.5">
+                        Rp {item.price.toLocaleString('id-ID')}
+                      </div>
+                    </div>
                   </div>
-                </button>
+
+                  {/* Bottom Area: Quantity Controls */}
+                  <div className="w-full mt-2">
+                    {qtyInCart > 0 ? (
+                      <div className="flex items-center justify-between bg-white rounded-lg border border-blue-200 p-0.5 overflow-hidden">
+                        <button 
+                          onClick={(e) => { e.stopPropagation(); updateQuantity(item.name, -1); }}
+                          className="p-1 text-red-500 hover:bg-red-50 rounded-md transition-colors"
+                        >
+                          <Minus size={14} />
+                        </button>
+                        <span className="text-[11px] font-bold text-blue-700">{qtyInCart}</span>
+                        <button 
+                          onClick={(e) => { e.stopPropagation(); updateQuantity(item.name, 1); }}
+                          className="p-1 text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
+                        >
+                          <Plus size={14} />
+                        </button>
+                      </div>
+                    ) : (
+                      <button 
+                        onClick={() => addToCart(item)}
+                        className="w-full py-1.5 bg-gray-50 text-gray-500 rounded-lg text-[10px] font-bold hover:bg-blue-600 hover:text-white transition-all border border-gray-100 flex items-center justify-center"
+                      >
+                        <Plus size={12} className="mr-1" /> Tambah
+                      </button>
+                    )}
+                  </div>
+                </div>
               );
             })}
           </div>
